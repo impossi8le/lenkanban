@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 2,
+  "source": {
+    "commit": null,
+    "reason": "Source snapshot without .git",
+    "algorithm": "sha256",
+    "digest": "b587d5217d855d3501f79bc2c2abd641d0911958921dd0d0483ce218a46523d2"
+  },
+  "environment": {
+    "browser": "145.0.7632.6",
+    "os": {
+      "platform": "win32",
+      "release": "10.0.19045",
+      "arch": "x64"
+    },
+    "playwright": "1.58.2"
+  },
+  "project": "visual-360-light",
+  "viewport": {
+    "width": 360,
+    "height": 844
+  },
+  "locale": "ru-RU",
+  "timezone": "Europe/Moscow",
+  "fixedTime": "2026-10-21T09:00:00Z",
+  "pngSha256": "191762feee4fba2ff9ae40ade1cf7a03fbae72c819a70186c36b6449dff5ece6"
+}

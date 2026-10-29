@@ -1,0 +1,11 @@
+import { describe, expect, it, vi } from "vitest";
+import { readTaskUrgencyPage, taskUrgencyWhere, TASK_CREATED_ORDER } from "./task-urgency-page";
+const urgent = [{id:"urgent-z",createdAt:"2026-01-01"},{id:"urgent-a",createdAt:"2026-01-01"},{id:"urgent-old",createdAt:"2025-01-01"}];
+const normal = [{id:"normal-new",createdAt:"2026-10-27"},{id:"normal-old",createdAt:"2026-10-26"},{id:"normal-last",createdAt:"2026-10-25"}];
+function fixture(){const read=vi.fn(async(isUrgent:boolean,skip:number,take:number)=>(isUrgent?urgent:normal).slice(skip,skip+take));const countUrgent=vi.fn(async()=>urgent.length);return{read,countUrgent};}
+describe("bounded urgent-first request pagination",()=>{
+ it("puts old urgent rows ahead of newer ordinary rows before the first-page limit without COUNT",async()=>{const f=fixture();expect((await readTaskUrgencyPage({...f,offset:0,pageSize:2})).map(row=>row.id)).toEqual(["urgent-z","urgent-a","urgent-old"]);expect(f.read).toHaveBeenCalledExactlyOnceWith(true,0,3);expect(f.countUrgent).not.toHaveBeenCalled();});
+ it("fills the boundary page from normal rows without fetching the entire dataset",async()=>{const f=fixture();expect((await readTaskUrgencyPage({...f,offset:2,pageSize:2})).map(row=>row.id)).toEqual(["urgent-old","normal-new","normal-old"]);expect(f.countUrgent).toHaveBeenCalledOnce();expect(f.read.mock.calls).toEqual([[true,2,3],[false,0,2]]);});
+ it("skips exhausted urgent rows and applies the remaining offset to ordinary rows",async()=>{const f=fixture();expect((await readTaskUrgencyPage({...f,offset:4,pageSize:2})).map(row=>row.id)).toEqual(["normal-old","normal-last"]);expect(f.read).toHaveBeenCalledExactlyOnceWith(false,1,3);expect(f.countUrgent).toHaveBeenCalledOnce();});
+ it("keeps both disjoint queries under exactly the same upper permission/search predicate and fixes deterministic order",()=>{const shared={AND:[{id:{in:["visible"]}},{title:{contains:"Search"}}]};expect(taskUrgencyWhere(shared,true)).toEqual({AND:[shared,{priority:{in:["CRITICAL","URGENT","HIGH"]}}]});expect(taskUrgencyWhere(shared,false)).toEqual({AND:[shared,{priority:{notIn:["CRITICAL","URGENT","HIGH"]}}]});expect(TASK_CREATED_ORDER).toEqual([{createdAt:"desc"},{id:"desc"}]);});
+});

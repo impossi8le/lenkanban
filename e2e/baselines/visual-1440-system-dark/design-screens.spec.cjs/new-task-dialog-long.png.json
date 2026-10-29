@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 2,
+  "source": {
+    "commit": null,
+    "reason": "Source snapshot without .git",
+    "algorithm": "sha256",
+    "digest": "61250830bae18b1449041e6cde0c5e2c5f8d415a17e27879db277d7cb30c477a"
+  },
+  "environment": {
+    "browser": "145.0.7632.6",
+    "os": {
+      "platform": "win32",
+      "release": "10.0.19045",
+      "arch": "x64"
+    },
+    "playwright": "1.58.2"
+  },
+  "project": "visual-1440-system-dark",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "locale": "ru-RU",
+  "timezone": "Europe/Moscow",
+  "fixedTime": "2026-10-21T09:00:00Z",
+  "pixelPolicy": {
+    "schemaVersion": 1,
+    "threshold": 0.02,
+    "maxDiffPixels": 0,
+    "maxChangedRgbPixels": 64,
+    "maxRgbChannelDelta": 4,
+    "maxAlphaChannelDelta": 0
+  },
+  "pngSha256": "719c0dee8baba616c4fd3da3ba6102f6ed467ef7780f1ab99866c51f984d193b"
+}

@@ -1,0 +1,195 @@
+{
+  "schemaVersion": 1,
+  "package": "react-big-calendar",
+  "version": "1.19.4",
+  "purpose": "Complete existing table rows/cells and keyboard access to empty time-scroll region; preserve native event/navigation behavior",
+  "upstream": "https://github.com/bigcalendar/react-big-calendar/tree/v1.19.4",
+  "owner": "Lenkanban calendar accessibility patch; review upstream before upgrading",
+  "packageJsonSha256": "5392ac3188cdad3f45e05042d71535be842746d5b8277f734c91dc8a7d173a49",
+  "licenseSha256": "57f2b8d7b11720454718c596aaacd8e8a52995c3d3198f7559180c51ca6d2cce",
+  "files": [
+    {
+      "path": "lib/DateContentRow.js",
+      "originalSha256": "ad9aa9a3996ac7f735b26c6bc4d2bf6bf7b71cf4397a539d0b299c31076db72e",
+      "patchedSha256": "6052460b9a0c3d4a04cce814ffbb3e67029534e6432a6e9e619c58dfd0809209",
+      "changes": [
+        {
+          "offset": 7989,
+          "before": "className: \"rbc-row \",\n        ref: this.headingRowRef",
+          "after": "className: \"rbc-row \",\n        role: \"row\",\n        ref: this.headingRowRef"
+        },
+        {
+          "offset": 7788,
+          "before": "className: (0, _clsx.default)('rbc-row-content', showAllEvents && 'rbc-row-content-scrollable'),\n        role: \"row\"",
+          "after": "className: (0, _clsx.default)('rbc-row-content', showAllEvents && 'rbc-row-content-scrollable')"
+        }
+      ]
+    },
+    {
+      "path": "lib/EventRow.js",
+      "originalSha256": "4d659051d16797c15203f863dda331fc970a086d089b23b4937e52ccdbb78513",
+      "patchedSha256": "aa716e648dade55dcb3c4ff7c6e893cb75f64efa76b349f65002fcf94c75c88a",
+      "changes": [
+        {
+          "offset": 2075,
+          "before": "}, []));",
+          "after": "}, segments.length ? [] : [_EventRowMixin.default.renderSpan(slots, slots, \"empty\", null)]));"
+        },
+        {
+          "offset": 1476,
+          "before": "className: (0, _clsx.default)(className, 'rbc-row')",
+          "after": "className: (0, _clsx.default)(className, 'rbc-row'), role: \"row\""
+        }
+      ]
+    },
+    {
+      "path": "lib/EventEndingRow.js",
+      "originalSha256": "b89e0aad1fd281bebaf787b7f7679123ac632a308d7516478f2288f4787ecf0f",
+      "patchedSha256": "708d0352fb1e627905d1c47b43a9af76334f6c66135167079f3aad957fd4da4f",
+      "changes": [
+        {
+          "offset": 3867,
+          "before": "className: \"rbc-row\"\n      }, row);",
+          "after": "className: \"rbc-row\", role: \"row\"\n      }, row.length ? row : [_EventRowMixin.default.renderSpan(slots, slots, \"empty\", null)]);"
+        }
+      ]
+    },
+    {
+      "path": "lib/EventRowMixin.js",
+      "originalSha256": "6c91bcdc368c48492e6510d3ab71711c895b5d5219c404afcd5f565c9c02b9cc",
+      "patchedSha256": "532fd1b14e343a7675036d5a4827257e644d35d9030d4907c55a0decb11ba753",
+      "changes": [
+        {
+          "offset": 2429,
+          "before": "className: \"rbc-row-segment\"",
+          "after": "className: \"rbc-row-segment\", role: \"cell\", \"aria-colspan\": len"
+        }
+      ]
+    },
+    {
+      "path": "lib/Header.js",
+      "originalSha256": "dc49ec48f9edc43c39d2d5cd72a0d1ff02571c6ae075b32842cf6b6091012b25",
+      "patchedSha256": "683b1d594274813f8a7deb0fbd7ca8f7b8a4536f309c54eece8eef681759099d",
+      "changes": [
+        {
+          "offset": 383,
+          "before": "role: \"columnheader\",\n    \"aria-sort\": \"none\"",
+          "after": ""
+        }
+      ]
+    },
+    {
+      "path": "lib/Month.js",
+      "originalSha256": "c2f9958e7c68e0078b1ff648462ca8ef148542d3812aaca2b4d0473f4ce1888c",
+      "patchedSha256": "efdd5dbca52dba400d7a3c776e71e2cae3b6a5f22c7fa8fbc2e66b975eab0bd5",
+      "changes": [
+        {
+          "offset": 10646,
+          "before": "className: \"rbc-header\"\n        },",
+          "after": "className: \"rbc-header\", role: \"columnheader\"\n        },"
+        }
+      ]
+    },
+    {
+      "path": "lib/TimeGridHeader.js",
+      "originalSha256": "40ccf634d65a0f54433bf112d1517eb01577b372b766dc84e7e57e74a7ec146d",
+      "patchedSha256": "cbcf3f4ec584848e95d7cca5c5b3fdb3649b605f39937088ec8716a8e54027ff",
+      "changes": [
+        {
+          "offset": 7524,
+          "before": "className: \"rbc-row rbc-time-header-cell\".concat",
+          "after": "role: \"row\",\n          className: \"rbc-row rbc-time-header-cell\".concat"
+        },
+        {
+          "offset": 6945,
+          "before": "className: \"rbc-time-header-content\",\n          key:",
+          "after": "className: \"rbc-time-header-content\",\n          role: \"table\", \"aria-label\": localizer.messages.allDay,\n          key:"
+        },
+        {
+          "offset": 4443,
+          "before": "key: i,\n          style: style,",
+          "after": "key: i,\n          role: \"columnheader\",\n          style: style,"
+        }
+      ]
+    },
+    {
+      "path": "lib/TimeGrid.js",
+      "originalSha256": "ac9bd2fc75c92fa785964fa6d3a9ea1dd3aef51f64cbdcd0f7c8e761daa801b2",
+      "patchedSha256": "1801ba43c683cd353bffc57ea733605ed13a0f4f32405d6e587c840e728e512f",
+      "changes": [
+        {
+          "offset": 14448,
+          "before": "className: \"rbc-time-content\",\n        onScroll:",
+          "after": "className: \"rbc-time-content\",\n        tabIndex: 0, role: \"region\", \"aria-label\": localizer.messages.time,\n        onScroll:"
+        }
+      ]
+    },
+    {
+      "path": "dist/react-big-calendar.esm.js",
+      "originalSha256": "0e8aefcf3023514212d2a73df7bffef15cd3c6491212f62ec38f95effd9128e7",
+      "patchedSha256": "e1f225d3afe90b43dacc949804f28ae08980c7ea6709688bd50fb7fd2b327360",
+      "changes": [
+        {
+          "offset": 152859,
+          "before": "className: \"rbc-time-content\",\n        onScroll:",
+          "after": "className: \"rbc-time-content\",\n        tabIndex: 0, role: \"region\", \"aria-label\": localizer.messages.time,\n        onScroll:"
+        },
+        {
+          "offset": 128694,
+          "before": "className: \"rbc-row rbc-time-header-cell\".concat",
+          "after": "role: \"row\",\n          className: \"rbc-row rbc-time-header-cell\".concat"
+        },
+        {
+          "offset": 128151,
+          "before": "className: \"rbc-time-header-content\",\n          key:",
+          "after": "className: \"rbc-time-header-content\",\n          role: \"table\", \"aria-label\": localizer.messages.allDay,\n          key:"
+        },
+        {
+          "offset": 125768,
+          "before": "key: i,\n          style: style,",
+          "after": "key: i,\n          role: \"columnheader\",\n          style: style,"
+        },
+        {
+          "offset": 82908,
+          "before": "className: \"rbc-header\"\n        },",
+          "after": "className: \"rbc-header\", role: \"columnheader\"\n        },"
+        },
+        {
+          "offset": 73866,
+          "before": "role: \"columnheader\",\n    \"aria-sort\": \"none\"",
+          "after": ""
+        },
+        {
+          "offset": 72958,
+          "before": "className: \"rbc-row \",\n        ref: this.headingRowRef",
+          "after": "className: \"rbc-row \",\n        role: \"row\",\n        ref: this.headingRowRef"
+        },
+        {
+          "offset": 72780,
+          "before": "className: clsx('rbc-row-content', showAllEvents && 'rbc-row-content-scrollable'),\n        role: \"row\"",
+          "after": "className: clsx('rbc-row-content', showAllEvents && 'rbc-row-content-scrollable')"
+        },
+        {
+          "offset": 61352,
+          "before": "className: \"rbc-row\"\n      }, row);",
+          "after": "className: \"rbc-row\", role: \"row\"\n      }, row.length ? row : [EventRowMixin.renderSpan(slots, slots, \"empty\", null)]);"
+        },
+        {
+          "offset": 54978,
+          "before": "}, []));",
+          "after": "}, segments.length ? [] : [EventRowMixin.renderSpan(slots, slots, \"empty\", null)]));"
+        },
+        {
+          "offset": 54420,
+          "before": "className: clsx(className, 'rbc-row')",
+          "after": "className: clsx(className, 'rbc-row'), role: \"row\""
+        },
+        {
+          "offset": 53612,
+          "before": "className: \"rbc-row-segment\"",
+          "after": "className: \"rbc-row-segment\", role: \"cell\", \"aria-colspan\": len"
+        }
+      ]
+    }
+  ]
+}

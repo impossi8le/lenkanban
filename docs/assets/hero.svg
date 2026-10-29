@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="360" viewBox="0 0 1280 360" role="img" aria-label="Ленканбан — обращения, задачи и работа отделов">
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#0d2343"/><stop offset="1" stop-color="#1859b2"/></linearGradient>
+    <linearGradient id="card" x2="1" y2="1"><stop stop-color="#ffffff" stop-opacity=".17"/><stop offset="1" stop-color="#ffffff" stop-opacity=".06"/></linearGradient>
+  </defs>
+  <rect width="1280" height="360" rx="24" fill="url(#bg)"/>
+  <circle cx="1225" cy="25" r="270" fill="#88b5ff" opacity=".07"/>
+  <path d="M57 75h21l8 9h37v45H57z" fill="none" stroke="#ffd241" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M71 113V98m17 15V94m17 19v-12" stroke="#ffd241" stroke-width="3"/>
+  <g font-family="Segoe UI,Arial,sans-serif">
+    <text x="56" y="197" font-size="62" font-weight="700" fill="#fff">Ленканбан</text>
+    <text x="59" y="244" font-size="23" fill="#c4d9fa">Обращения, задачи и работа отделов</text>
+    <text x="59" y="303" font-size="16" fill="#9dc2fa">Понятная доска · Общение в карточке · Личный «Мой день»</text>
+    <g transform="translate(770 63)">
+      <rect width="205" height="235" rx="13" fill="url(#card)" stroke="#769fd7" stroke-opacity=".4"/>
+      <rect x="222" width="205" height="235" rx="13" fill="url(#card)" stroke="#769fd7" stroke-opacity=".4"/>
+      <circle cx="20" cy="26" r="4" fill="#ffc770"/><text x="34" y="32" font-size="17" font-weight="600" fill="#fff">В работе</text>
+      <circle cx="242" cy="26" r="4" fill="#61e2ba"/><text x="256" y="32" font-size="17" font-weight="600" fill="#fff">Готово</text>
+      <rect x="12" y="54" width="181" height="98" rx="9" fill="#fff"/>
+      <text x="25" y="81" font-size="14" font-weight="600" fill="#16345b">Запрос коллеги</text>
+      <rect x="25" y="94" width="146" height="6" rx="3" fill="#dce6f4"/><rect x="25" y="108" width="109" height="6" rx="3" fill="#dce6f4"/>
+      <rect x="25" y="127" width="62" height="12" rx="6" fill="#e6efff"/>
+      <rect x="12" y="163" width="181" height="57" rx="9" fill="#fff" fill-opacity=".91"/>
+      <text x="25" y="195" font-size="14" font-weight="600" fill="#16345b">Уточнить детали</text>
+      <rect x="234" y="54" width="181" height="98" rx="9" fill="#fff"/>
+      <text x="247" y="81" font-size="14" font-weight="600" fill="#16345b">Документ подготовлен</text>
+      <rect x="247" y="94" width="146" height="6" rx="3" fill="#dce6f4"/><rect x="247" y="108" width="109" height="6" rx="3" fill="#dce6f4"/>
+      <path d="m248 133 4 4 8-9" fill="none" stroke="#199e74" stroke-width="2"/>
+      <text x="267" y="139" font-size="12" fill="#24755e">Результат сохранён</text>
+    </g>
+  </g>
+</svg>

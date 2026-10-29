@@ -1,0 +1,161 @@
+.viewport {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.calendar {
+  display: flex;
+  flex-direction: column;
+  min-height: 32rem;
+  height: max(32rem, calc(100dvh - 16rem));
+  min-width: 0;
+}
+
+.calendar :global(.rbc-calendar) {
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
+}
+
+.calendar :global(.rbc-toolbar) {
+  flex-shrink: 0;
+  gap: 0.5rem;
+}
+
+.calendar :global(.rbc-btn-group) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  min-width: 0;
+  white-space: normal;
+}
+
+.calendar :global(.rbc-toolbar button) {
+  color: var(--foreground);
+  background-color: var(--background);
+  border-color: var(--border);
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  margin: 0;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.375rem;
+}
+
+.calendar :global(.rbc-toolbar button:hover),
+.calendar :global(.rbc-toolbar button:focus) {
+  color: var(--foreground);
+  background-color: var(--card-hover);
+  border-color: var(--border);
+}
+
+.calendar :global(.rbc-toolbar button.rbc-active),
+.calendar :global(.rbc-toolbar button:active) {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+  border-color: var(--primary);
+}
+
+.calendar :global(.rbc-toolbar button.rbc-active:hover),
+.calendar :global(.rbc-toolbar button.rbc-active:focus),
+.calendar :global(.rbc-toolbar button:active:hover),
+.calendar :global(.rbc-toolbar button:active:focus) {
+  color: var(--primary-foreground);
+  background-color: var(--primary-hover);
+  border-color: var(--primary);
+}
+
+.calendar :global(.rbc-toolbar-label) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.calendar :global(.rbc-month-view),
+.calendar :global(.rbc-time-view),
+.calendar :global(.rbc-agenda-view) {
+  min-height: 16rem;
+  min-width: 0;
+}
+
+.calendar :global(.rbc-event-content),
+.calendar :global(.rbc-agenda-event-cell) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.calendar :global(.rbc-agenda-view table.rbc-agenda-table) {
+  table-layout: fixed;
+}
+
+.calendar :global(.rbc-agenda-view table.rbc-agenda-table thead > tr > th) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+}
+
+.calendar :global(.rbc-agenda-date-cell),
+.calendar :global(.rbc-agenda-time-cell) {
+  width: 25%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.taskButton {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.taskButton:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+@media (max-width: 639px) {
+  .calendar {
+    min-height: 34rem;
+    height: max(34rem, calc(100dvh - 12rem));
+  }
+
+  .calendar :global(.rbc-toolbar) {
+    align-items: stretch;
+  }
+
+  .calendar :global(.rbc-toolbar-label) {
+    padding: 0.25rem 0;
+    text-align: left;
+  }
+
+  .calendar :global(.rbc-agenda-view table.rbc-agenda-table tbody > tr > td),
+  .calendar :global(.rbc-agenda-view table.rbc-agenda-table thead > tr > th) {
+    padding: 0.5rem 0.375rem;
+    font-size: 0.75rem;
+  }
+
+  .taskButton {
+    min-height: 2.75rem;
+  }
+}
+
+.calendar :global(.rbc-off-range-bg) {
+  background-color: var(--muted);
+}
+
+.calendar :global(.rbc-off-range),
+.calendar :global(.rbc-off-range .rbc-button-link) {
+  color: var(--foreground);
+}
+
+.calendar :global(.rbc-time-content:focus-visible) {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}

@@ -1,0 +1,45 @@
+name: Production prebuilt archives (reviewed source)
+on:
+  push:
+    branches: [codex/redesign-production-20261025]
+    paths: ["**"]
+permissions:
+  contents: read
+concurrency:
+  group: redesign-production-20261025
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      SOURCE_COMMIT: ${{ github.sha }}
+    steps:
+      - name: Checkout exact application source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ github.sha }}
+          path: source
+          persist-credentials: false
+      - name: Checkout packaging controls from this workflow commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ github.sha }}
+          path: pipeline
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/package-production-prebuilt.sh
+            scripts/verify-prebuilt-runtime.cjs
+          sparse-checkout-cone-mode: false
+      - name: Build and verify Linux amd64 archives
+        shell: bash
+        run: |
+          bash pipeline/scripts/package-production-prebuilt.sh "$GITHUB_WORKSPACE/source" "$RUNNER_TEMP/lenkanban-production-prebuilt"
+      - name: Upload immutable image archives and closed metadata
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: lenkanban-production-linux-amd64-redesign-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/lenkanban-production-prebuilt/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 2

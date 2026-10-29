@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 2,
+  "source": {
+    "commit": null,
+    "reason": "Source snapshot without .git",
+    "algorithm": "sha256",
+    "digest": "91ecbc45010bc2760c4c3bcf730b4152d3408cb26918aa7ae4c0c1aa9de0e0ed"
+  },
+  "environment": {
+    "browser": "145.0.7632.6",
+    "os": {
+      "platform": "win32",
+      "release": "10.0.19045",
+      "arch": "x64"
+    },
+    "playwright": "1.58.2"
+  },
+  "project": "visual-360-light",
+  "viewport": {
+    "width": 360,
+    "height": 844
+  },
+  "locale": "ru-RU",
+  "timezone": "Europe/Moscow",
+  "fixedTime": "2026-10-21T09:00:00Z",
+  "pixelPolicy": {
+    "schemaVersion": 1,
+    "threshold": 0.02,
+    "maxDiffPixels": 0,
+    "maxChangedRgbPixels": 64,
+    "maxRgbChannelDelta": 4,
+    "maxAlphaChannelDelta": 0
+  },
+  "stability": {
+    "ready": true,
+    "pendingRequests": 0,
+    "loading": 0,
+    "pendingImages": 0,
+    "fontStatus": "loaded",
+    "dimensions": {
+      "width": 360,
+      "height": 844,
+      "bodyHeight": 844
+    },
+    "failedFonts": 0,
+    "socketFrames": 19,
+    "digest": "c900ee8896b72b48c638a3c8d81e8127c3ec012a6d16c34cc0c50e7d6d7ce98e",
+    "revision": 234,
+    "contentSha256": "4b8ccb001145e8d0876446431135922a89acb8607cba7ef62239bdbfb5d57ee9",
+    "samples": 8,
+    "quietMs": 1200,
+    "fonts": [
+      {
+        "familyName": "Inter",
+        "postScriptName": "Inter-Thin",
+        "isCustomFont": true
+      }
+    ]
+  },
+  "pngSha256": "5933f8496429b5c89ea50a6f1c6d62f9c61563ccdcb78b464ea6ccc9db3acd64"
+}

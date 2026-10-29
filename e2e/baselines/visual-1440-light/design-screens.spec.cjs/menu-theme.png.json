@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 2,
+  "source": {
+    "commit": null,
+    "reason": "Source snapshot without .git",
+    "algorithm": "sha256",
+    "digest": "1a8c00271b5b47021de23a9b9bdd433515c97fe46f5e4f83f565a4c0f8b83c58"
+  },
+  "environment": {
+    "browser": "145.0.7632.6",
+    "os": {
+      "platform": "win32",
+      "release": "10.0.19045",
+      "arch": "x64"
+    },
+    "playwright": "1.58.2"
+  },
+  "project": "visual-1440-light",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "locale": "ru-RU",
+  "timezone": "Europe/Moscow",
+  "fixedTime": "2026-10-21T09:00:00Z",
+  "pixelPolicy": {
+    "schemaVersion": 1,
+    "threshold": 0.02,
+    "maxDiffPixels": 0,
+    "maxChangedRgbPixels": 64,
+    "maxRgbChannelDelta": 4,
+    "maxAlphaChannelDelta": 0
+  },
+  "stability": {
+    "ready": true,
+    "pendingRequests": 0,
+    "loading": 0,
+    "pendingImages": 0,
+    "fontStatus": "loaded",
+    "dimensions": {
+      "width": 1440,
+      "height": 900,
+      "bodyHeight": 900
+    },
+    "failedFonts": 0,
+    "socketFrames": 8,
+    "digest": "fd0f8c3471275764b4d51c79e920997a3ebe3e60fd17d14a85ec1b087871f782",
+    "revision": 135,
+    "pendingUrls": [],
+    "contentSha256": "9d5037ad6faf01f9020071c207a9c77b0f425b7da27b63cec248ec5e15b17650",
+    "samples": 10,
+    "quietMs": 1200,
+    "fonts": [
+      {
+        "familyName": "Cambria Math",
+        "postScriptName": "CambriaMath",
+        "isCustomFont": false
+      },
+      {
+        "familyName": "Inter",
+        "postScriptName": "Inter-Thin",
+        "isCustomFont": true
+      },
+      {
+        "familyName": "JetBrains Mono",
+        "postScriptName": "JetBrains-Mono-Thin",
+        "isCustomFont": true
+      },
+      {
+        "familyName": "Segoe UI Symbol",
+        "postScriptName": "SegoeUISymbol",
+        "isCustomFont": false
+      }
+    ]
+  },
+  "pngSha256": "cf406b2780352c3031e7b72bbc1da850c80a3f2decba1db17a32bcc667520bb6"
+}

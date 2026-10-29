@@ -1,0 +1,199 @@
+# Ленканбан — изолированный Compose-пакет для taskboard.lenremontn8n.ru (#73).
+#
+# Проект: taskboard. Каталог на VPS: /opt/taskboard.
+# Всё своё: сеть, контейнеры, БД, пользователь БД, тома. MCP (/opt/mcp-isolated)
+# и прочие проекты не затрагиваются.
+#
+# Публикация: ТОЛЬКО loopback. Приложение — 127.0.0.1:${TASKBOARD_APP_PORT:-18766},
+# Socket.IO — 127.0.0.1:${TASKBOARD_SOCKET_PORT:-18767}. Оба порта задаются
+# переменными окружения: если 18767 занят, достаточно поменять одну переменную
+# TASKBOARD_SOCKET_PORT (и отрендерить nginx-шаблон заново).
+# Наружу ничего не публикуется: вход только через nginx.
+#
+# Примечание: Socket.IO работает отдельным процессом (server.js,
+# ecosystem.config.js) и не может обслуживаться тем же портом, что Next.js.
+# Порт 18765 зарезервирован инструкцией MCP и здесь не используется.
+# Если владелец требует строго один опубликованный порт, потребуется объединение
+# Socket.IO с Next.js в src/** — это вне границ #73 и требует отдельного решения.
+#
+# ВАЖНО: переменные ${POSTGRES_*}, ${TASKBOARD_VERSION}, ${NEXT_PUBLIC_APP_URL}
+# подставляются Compose из env-файла, а не из service env_file. В каталоге
+# /opt/taskboard выполните один раз в сессии:
+#   export COMPOSE_ENV_FILES=.env.taskboard
+# (Compose >= 2.24) или добавляйте `--env-file .env.taskboard` к каждой команде.
+#
+# Проверка: docker compose -f compose.taskboard.yaml -p taskboard config --quiet
+
+name: taskboard
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  db:
+    image: postgres:16.10-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - taskboard_pgdata:/var/lib/postgresql/data
+    networks:
+      - taskboard_net
+    # Портов нет намеренно: БД доступна только внутри сети taskboard_net.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB} -h 127.0.0.1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    cpus: "0.50"
+    mem_limit: 512M
+    mem_reservation: 128M
+    memswap_limit: 512M
+    pids_limit: 200
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+      args:
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:?NEXT_PUBLIC_APP_URL is required}
+        NEXT_PUBLIC_SOCKET_URL: ${NEXT_PUBLIC_SOCKET_URL:-}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+    image: taskboard-app:${TASKBOARD_VERSION:?TASKBOARD_VERSION is required}
+    restart: unless-stopped
+    env_file:
+      - ${TASKBOARD_ENV_FILE:-.env.taskboard}
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+      ATTACHMENT_STORAGE: local
+      ATTACHMENT_LOCAL_DIR: /data/attachments
+      # Внутри compose-сети БД доступна по имени сервиса.
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public&connection_limit=10
+      SOCKET_PORT: "3556"
+    volumes:
+      - taskboard_attachments:/data/attachments
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${TASKBOARD_APP_PORT:-18766}:3000"
+    networks:
+      - taskboard_net
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get({host:'127.0.0.1',port:3000,path:'/api/auth/session',timeout:4000},r=>process.exit(r.statusCode&&r.statusCode<500?0:1)).on('error',()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    cpus: "0.75"
+    mem_limit: 512M
+    memswap_limit: 512M
+    mem_reservation: 256M
+    pids_limit: 300
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    logging: *default-logging
+
+  socket:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: socket
+      args:
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:?NEXT_PUBLIC_APP_URL is required}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+    image: taskboard-socket:${TASKBOARD_VERSION:?TASKBOARD_VERSION is required}
+    restart: unless-stopped
+    env_file:
+      - ${TASKBOARD_ENV_FILE:-.env.taskboard}
+    environment:
+      NODE_ENV: production
+      SOCKET_PORT: "3556"
+      PORT: "3000"
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public&connection_limit=5
+    depends_on:
+      db:
+        condition: service_healthy
+      app:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${TASKBOARD_SOCKET_PORT:-18767}:3556"
+    networks:
+      - taskboard_net
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get({host:'127.0.0.1',port:3556,path:'/socket.io/?EIO=4&transport=polling',timeout:4000},r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    cpus: "0.35"
+    mem_limit: 256M
+    memswap_limit: 256M
+    mem_reservation: 128M
+    pids_limit: 200
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    logging: *default-logging
+
+  # Одноразовый сервис миграций. Запускается ТОЛЬКО вручную:
+  #   docker compose -p taskboard --profile tools run --rm migrate
+  # Образ собирается из стадии builder (там есть prisma CLI и schema),
+  # поэтому миграции не тянут пакеты из сети в рантайме.
+  migrate:
+    # Только отдельный осознанный запуск: обычный up этот профиль не включает.
+    # При ~1.4 ГБ свободной RAM сначала остановить app/socket: ещё 512M
+    # одновременно с их лимитами не помещаются в текущий запас памяти.
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    image: taskboard-migrate:${TASKBOARD_VERSION:?TASKBOARD_VERSION is required}
+    env_file:
+      - ${TASKBOARD_ENV_FILE:-.env.taskboard}
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
+    command: ["npx", "prisma", "migrate", "deploy"]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - taskboard_net
+    restart: "no"
+    cpus: "0.50"
+    mem_limit: 512M
+    memswap_limit: 512M
+    pids_limit: 200
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+
+networks:
+  taskboard_net:
+    name: ${COMPOSE_PROJECT_NAME:-taskboard}_net
+    driver: bridge
+
+volumes:
+  taskboard_attachments:
+    name: ${COMPOSE_PROJECT_NAME:-taskboard}_attachments
+  taskboard_pgdata:
+    name: ${COMPOSE_PROJECT_NAME:-taskboard}_pgdata

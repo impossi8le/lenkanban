@@ -1,0 +1,13 @@
+# Normalize line endings across OSes to reduce CRLF/LF noise
+# Keep repository text files in LF
+* text=auto eol=lf
+
+# Lockfiles are text too (keep LF)
+*.lock text eol=lf
+
+# Images/binaries
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary

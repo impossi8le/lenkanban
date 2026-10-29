@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "key": "tech-support",
+  "name": "Техподдержка и ИТ",
+  "description": "Единая доска обращений в техническую поддержку.",
+  "activation": "declared-not-active",
+  "cardUnit": "Одна заявка: название, описание и вложения.",
+  "descriptionHint": "В названии кратко укажите проблему или запрос, например: «Не открывается почта». В описании расскажите, что произошло, какой результат ожидали и как повторить проблему. При необходимости приложите снимок экрана или файл с примером. Вложения необязательны. Пароли, токены и другие секреты не прикладывайте.",
+  "columns": [
+    { "key": "new", "name": "Новые", "position": 0, "workflowKey": "TODO", "final": false },
+    { "key": "in-progress", "name": "В работе", "position": 1, "workflowKey": "IN_PROGRESS", "final": false },
+    { "key": "waiting", "name": "Ждём сотрудника", "position": 2, "workflowKey": null, "final": false },
+    { "key": "resolved", "name": "Решено", "position": 3, "workflowKey": "REVIEW", "final": false },
+    { "key": "closed", "name": "Закрыто", "position": 4, "workflowKey": "DONE", "final": true }
+  ],
+  "extraStates": [],
+  "transitions": [
+    { "from": "new", "to": "in-progress", "action": "Взять в работу", "actor": "executor" },
+    { "from": "in-progress", "to": "waiting", "action": "Запросить уточнение", "actor": "executor" },
+    { "from": "waiting", "to": "in-progress", "action": "Ответить", "actor": "author" },
+    { "from": "in-progress", "to": "resolved", "action": "Решить", "actor": "executor" },
+    { "from": "resolved", "to": "closed", "action": "Закрыть", "actor": "executor" },
+    { "from": "resolved", "to": "in-progress", "action": "Вернуть в работу", "actor": "author" },
+    { "from": "closed", "to": "in-progress", "action": "Переоткрыть", "actor": "author", "condition": "С указанием причины." }
+  ],
+  "crossBoardTransfer": { "allowed": false, "policy": "Перенос между досками запрещён." },
+  "visibility": {
+    "enforced": false,
+    "declaredOnly": true,
+    "rules": [ { "subject": "author", "canSee": ["own_requests"] }, { "subject": "group", "canSee": ["all_sent_requests_of_board"] } ]
+  },
+  "sla": {
+    "clock": "work_started",
+    "queueMeasuredSeparately": true,
+    "pausesOnClarification": true,
+    "hints": [ { "key": "execution", "label": "Выполнение", "targetMinutes": null, "source": "unconfigured" } ]
+  },
+  "openQuestions": ["Какой рабочий календарь и сроки обслуживания установить?"]
+}

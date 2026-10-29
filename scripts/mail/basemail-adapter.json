@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "layout": "basemail-rendered-tables",
+  "observed_at": "2026-10-20",
+  "message": "table.basemail_topic[id^=\"post_\"]",
+  "body": "td[id^=\"posttext_\"]",
+  "idAttribute": "id",
+  "author": ":scope > tbody > tr:first-child > td:first-child > em",
+  "authorPattern": "^<([^>]+)>",
+  "date": ":scope > tbody > tr:first-child > td:nth-child(2) > em",
+  "attachments": "div[id$=\"_attachments\"] a[href]",
+  "attachmentsStatus": "unverified",
+  "limitations": [
+    "Message selectors verified on two topics from an initially filtered list; historical and paginated layouts require separate live checks.",
+    "Attachment placeholders were observed without links; attachment completeness is unverified.",
+    "Dates are source-local strings; no timezone is inferred."
+  ]
+}

@@ -1,0 +1,197 @@
+# Ленканбан — отдельный vhost taskboard.lenremontn8n.ru (#73).
+#
+# НЕ КОПИРОВАТЬ ВСЛЕПУЮ. Перед установкой человек с доступом к серверу обязан:
+#   1) nginx -T | grep -n "server_name" — убедиться, что блока с этим именем нет;
+#   2) если блок есть — сохранить копию и адаптировать ЕГО, а не заменять;
+#   3) сохранить резервную копию затрагиваемых файлов nginx.
+#
+# Установка (только отдельным файлом, чужие конфиги не трогать):
+#   /etc/nginx/sites-available/taskboard.lenremontn8n.ru
+#   ln -s /etc/nginx/sites-available/taskboard.lenremontn8n.ru /etc/nginx/sites-enabled/
+#   nginx -t && systemctl reload nginx
+#
+# ДВЕ ФАЗЫ:
+#   Фаза 1 (сертификата ещё нет): использовать HTTP-bootstrap из пакета
+#     Taskboard-.../templates/taskboard.http.nginx.conf (только listen 80),
+#     затем выпустить сертификат:
+#       certbot --nginx -d taskboard.lenremontn8n.ru --redirect
+#     Certbot сам добавит ssl-блок и редирект.
+#   Фаза 2: заменить блок на приведённый ниже (или сверить с тем, что создал certbot),
+#     nginx -t && systemctl reload nginx.
+#
+# Порты задаются переменными TASKBOARD_APP_PORT (по умолчанию 18766) и
+# TASKBOARD_SOCKET_PORT (по умолчанию 18768); оба только loopback.
+# 18765 не используется — он зарезервирован инструкцией MCP.
+#
+# Это ШАБЛОН. Перед установкой отрендерите его (подставляются только две
+# переменные, остальные $... остаются nginx):
+#   export TASKBOARD_APP_PORT="${TASKBOARD_APP_PORT:-18766}"
+#   export TASKBOARD_SOCKET_PORT="${TASKBOARD_SOCKET_PORT:-18768}"
+#   envsubst '${TASKBOARD_APP_PORT} ${TASKBOARD_SOCKET_PORT}' \
+#     < taskboard.conf.template > taskboard.lenremontn8n.ru
+# Если envsubst недоступен: apt-get install -y gettext-base.
+# Не устанавливайте .template как есть — nginx не поймёт ${...}.
+# Весь файл включается внутри http {} (обычный sites-enabled include), НЕ
+# внутри server {}: map и log_format допустимы только в http-контексте.
+# Установить определения один раз; не дублировать этот шаблон под разными именами.
+
+# Access log: только статические категории, серверные ID и измерения времени.
+# Произвольный method от клиента никогда не попадает в строку журнала.
+map $request_method $taskboard_log_method {
+    default OTHER;
+    GET GET;
+    HEAD HEAD;
+    POST POST;
+    PUT PUT;
+    PATCH PATCH;
+    DELETE DELETE;
+    OPTIONS OPTIONS;
+}
+
+# Это UUID ОТВЕТА приложения, а не входной X-Request-Id и не nginx $request_id.
+# Отсутствующий/невалидный upstream ID не заменяется вымышленным app ID.
+map $upstream_http_x_request_id $taskboard_app_request_id {
+    default "-";
+    "~*^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" $upstream_http_x_request_id;
+}
+
+# Не журналируем upstream address. Редирект/локальный ответ явно отличается
+# от попытки обращения к upstream (в том числе неуспешной).
+map $upstream_addr $taskboard_upstream_state {
+    "" none;
+    default attempted;
+}
+
+# На локальных ответах nginx может вернуть пустой timing, а не "-".
+# Приводим отсутствие к одному явному маркеру; значения/списки берём только
+# из встроенных измерений nginx, не из заголовков запроса или ответа.
+map $upstream_response_time $taskboard_upstream_response_seconds {
+    "" "-";
+    default $upstream_response_time;
+}
+map $upstream_connect_time $taskboard_upstream_connect_seconds {
+    "" "-";
+    default $upstream_connect_time;
+}
+map $upstream_header_time $taskboard_upstream_header_seconds {
+    "" "-";
+    default $upstream_header_time;
+}
+
+# Все timings в СЕКУНДАХ. Upstream timings — строки: nginx использует "-"
+# при отсутствии измерения и списки значений при нескольких попытках.
+# Никаких URI/path/query, IP, referrer, User-Agent, cookies, body или raw headers.
+log_format taskboard_observation escape=json
+    '{"schema":"taskboard.access.v1","at":"$time_iso8601",'
+    '"edgeAttemptId":"$request_id","appRequestId":"$taskboard_app_request_id",'
+    '"method":"$taskboard_log_method","status":$status,'
+    '"requestTimeSeconds":"$request_time","upstreamResponseTimeSeconds":"$taskboard_upstream_response_seconds",'
+    '"upstreamConnectTimeSeconds":"$taskboard_upstream_connect_seconds","upstreamHeaderTimeSeconds":"$taskboard_upstream_header_seconds",'
+    '"upstream":"$taskboard_upstream_state"}';
+
+# ВАЖНО: log_format защищает только эти access logs. Штатный nginx error_log
+# не поддерживает такой формат и может включать raw request/URI/query/IP.
+# Сохраняем warn и настоящие ошибки; это НЕ решение error-log privacy/retention.
+# Доступ/очистка/error-log boundary требуют отдельного решения оператора.
+
+# --- HTTP: только редирект на HTTPS ---------------------------------------
+server {
+    listen 80;
+    listen [::]:80;
+    server_name taskboard.lenremontn8n.ru;
+    server_tokens off;
+
+    access_log /var/log/nginx/taskboard.access.log taskboard_observation;
+    error_log  /var/log/nginx/taskboard.error.log warn;
+
+    # ACME-путь оставлен доступным по HTTP на случай продления сертификата.
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# --- HTTPS ----------------------------------------------------------------
+server {
+    # Ubuntu 24.04 несёт nginx 1.24.x, где директивы `http2 on;` ещё нет:
+    # используется форма `listen ... http2` (работает и на 1.25+).
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name taskboard.lenremontn8n.ru;
+    server_tokens off;
+
+    access_log /var/log/nginx/taskboard.access.log taskboard_observation;
+    error_log  /var/log/nginx/taskboard.error.log warn;
+
+    ssl_certificate     /etc/letsencrypt/live/taskboard.lenremontn8n.ru/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/taskboard.lenremontn8n.ru/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:taskboard_ssl:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+
+    # Заголовки безопасности. CSP намеренно не задаётся этим шаблоном:
+    # Next.js использует инлайн-скрипты гидратации, неверная CSP сломает доску.
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+
+    # Согласовано с serverActions.bodySizeLimit (50mb) и лимитом вложений (25 МБ).
+    client_max_body_size 50m;
+    client_body_timeout 60s;
+
+    # Socket.IO: отдельный процесс, отдельный upstream, обязательный upgrade.
+    location /socket.io/ {
+        proxy_pass http://127.0.0.1:${TASKBOARD_SOCKET_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        # Public edge: discard client-supplied chains before the app reads IP.
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        # Передаём upgrade только когда его прислал клиент: polling-транспорт
+        # не должен получать Connection: upgrade безусловно.
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $http_connection;
+        proxy_buffering off;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+
+    # Основное приложение, включая /_next/static/. nginx здесь не задаёт
+    # Cache-Control и не кэширует (нет proxy_cache), поэтому заголовки статики
+    # приходят из приложения: production отдаёт immutable для
+    # /_next/static/**, остальное — no-store. Не добавляйте сюда
+    # add_header Cache-Control: второй заголовок конфликтует с ответом Next.js.
+    location / {
+        # nginx owns HSTS here; suppress the application's copy.
+        proxy_hide_header Strict-Transport-Security;
+        proxy_pass http://127.0.0.1:${TASKBOARD_APP_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        # Public edge: discard client-supplied chains before the app reads IP.
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $http_connection;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+        # Не кэшировать ответы приложения на уровне nginx: приложение уже
+        # отдаёт no-store; кэш прокси только маскирует ошибки релиза.
+        proxy_buffering off;
+    }
+
+    # Служебные файлы не отдаём.
+    location ~ /\.(?!well-known) {
+        deny all;
+    }
+}

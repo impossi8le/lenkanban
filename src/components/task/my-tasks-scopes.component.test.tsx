@@ -1,0 +1,38 @@
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+const mocks = vi.hoisted(() => ({ get: vi.fn(), scope: "mine" }));
+vi.mock("@/lib/api", () => ({ apiFetch: mocks.get }));
+vi.mock("next-auth/react", () => ({ useSession: () => ({ status: "authenticated", data: { user: { id: "scope-actor" } } }) }));
+vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams({ scope: mocks.scope }) }));
+vi.mock("@/app/(dashboard)/my-tasks/MyTaskCommandLoader", () => ({ MyTaskCommandLoader: () => null, isMyTaskReadDenied: () => false }));
+import MyTasksPage from "@/app/(dashboard)/my-tasks/page";
+const clients: QueryClient[] = [];
+const notificationSummary = () => ({ actorId: "scope-actor", count: 0, byProject: {}, byTask: {}, unscopedCount: 0 });
+beforeEach(() => { mocks.get.mockReset().mockImplementation(async (url: string) => url === "/api/notifications/unread-count" ? notificationSummary() : []); });
+afterEach(() => { cleanup(); clients.splice(0).forEach(client => client.clear()); });
+it.each([["mine", "Мои отправленные обращения", "requestScope=mine"], ["reply", "Мне нужно ответить", "requestScope=reply"], ["assigned", "Я исполнитель", "assignedToMe=true"]])("loads %s through its own server filter and actor-scoped cache", async (scope, heading, filter) => {
+  mocks.scope = scope;
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } }); clients.push(client);
+  render(<QueryClientProvider client={client}><MyTasksPage /></QueryClientProvider>);
+  await screen.findByRole("heading", { name: heading });
+  expect(screen.getByRole("button", { name: scope === "assigned" ? "Доска" : "Список" })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("region", { name: scope === "assigned" ? "Колонки обращений" : "Список обращений" })).toBeInTheDocument();
+  expect(mocks.get).toHaveBeenCalledWith(`/api/tasks?${filter}&limit=500`, expect.objectContaining({ signal: expect.any(AbortSignal) }));
+  expect(client.getQueryCache().find({ queryKey: ["my-tasks", "scope-actor", scope, false], exact: true })).toBeDefined();
+});
+it("requests unseen rows from the server while preserving the chosen list view", async () => {
+  mocks.scope = "assigned";
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } }); clients.push(client);
+  render(<QueryClientProvider client={client}><MyTasksPage /></QueryClientProvider>);
+  await screen.findByRole("heading", { name: "Я исполнитель" });
+  fireEvent.click(screen.getByRole("button", { name: "Список" }));
+  let finish!: (value: unknown[]) => void;
+  mocks.get.mockImplementation((url: string) => url === "/api/notifications/unread-count" ? Promise.resolve(notificationSummary()) : new Promise(resolve => { finish = resolve; }));
+  fireEvent.click(screen.getByRole("button", { name: "Новые в очереди · 0" }));
+  await waitFor(() => expect(mocks.get).toHaveBeenCalledWith("/api/tasks?assignedToMe=true&limit=500&unseen=1", expect.objectContaining({ signal: expect.any(AbortSignal) })));
+  expect(screen.getByRole("button", { name: "Список" })).toHaveAttribute("aria-pressed", "true");
+  finish([]);
+  await waitFor(() => expect(client.getQueryCache().find({ queryKey: ["my-tasks", "scope-actor", "assigned", true], exact: true })?.state.status).toBe("success"));
+  expect(screen.getByRole("button", { name: "Список" })).toHaveAttribute("aria-pressed", "true");
+});

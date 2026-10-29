@@ -1,0 +1,1 @@
+// Removed: Clerk provider. Auth is handled by NextAuth (Auth.js).

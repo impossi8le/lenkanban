@@ -1,0 +1,54 @@
+name: Задача
+description: Задача с целью, границами и проверяемой приёмкой
+title: "[Задача] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Правила: [docs/TASK_WORKFLOW.md](https://github.com/lenremont2/kanban_pochta/blob/main/docs/TASK_WORKFLOW.md).
+        Добавьте issue в нативный GitHub Project и установите поле Status «Заведена». Status проекта определяет этап работы.
+        Перед началом работы назначьте ответственного, оставьте комментарий о намерении, предполагаемых файлах и зависимостях, затем измените Status на «В работе».
+        Не вставляйте секреты, токены и чувствительные данные.
+  - type: textarea
+    id: goal
+    attributes:
+      label: Цель и текущая проблема
+      description: Какой результат нужен и для кого? Что сейчас происходит?
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Границы задачи
+      description: Что входит в работу? Какие ограничения нужно учитывать?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Критерии приёмки
+      description: Проверяемые условия завершения, по одному на строку.
+      placeholder: "- [ ] При … пользователь видит …"
+    validations:
+      required: true
+  - type: textarea
+    id: ownership
+    attributes:
+      label: Ответственный и предполагаемые файлы
+      description: Укажите ответственного, предполагаемые файлы/участки и владельцев при параллельной работе. Если ещё не определены, напишите это; уточните до начала работы.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Зависимости и блокировки
+      description: Ссылки на issues, причина зависимости и следующий шаг. Если нет — напишите «Нет».
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: План проверки
+      description: Точные команды или шаги приёмки, нужная среда и ожидаемый результат. Фактические результаты будут добавлены в комментарии перед завершением.
+    validations:
+      required: true

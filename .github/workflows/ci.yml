@@ -1,0 +1,352 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: '23 3 * * *'
+  workflow_dispatch:
+    inputs:
+      run_matrix:
+        description: Run the extended cross-browser and mobile E2E matrix
+        type: boolean
+        default: false
+      update_baselines:
+        description: Create visual baselines for download and review
+        type: boolean
+        default: false
+      only:
+        description: 'Фильтр путей Playwright, например e2e/design-screens.spec.cjs'
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e-smoke:
+    name: e2e-smoke
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: kanban_test
+          POSTGRES_USER: kanban_test
+          POSTGRES_PASSWORD: synthetic-e2e-test-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kanban_test -d kanban_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    # No repository/environment secrets: only this job's disposable service.
+    env:
+      CI: 'true'
+      DATABASE_URL: postgresql://kanban_test:synthetic-e2e-test-only@127.0.0.1:5432/kanban_test
+      E2E_DATABASE_URL: postgresql://kanban_test:synthetic-e2e-test-only@127.0.0.1:5432/kanban_test
+      TEST_DATABASE_URL: ''
+      PRODUCTION_DATABASE_URL: ''
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Generate Prisma client
+        run: npx prisma generate
+      - name: Enable trigram extension in the disposable database
+        # The schema has a GIN index using gin_trgm_ops; db push fails without it.
+        run: echo 'CREATE EXTENSION IF NOT EXISTS pg_trgm;' | npx prisma db execute --stdin --url "$DATABASE_URL"
+      - name: Apply schema to the disposable service database
+        run: npx prisma db push --skip-generate
+      - name: Install Chromium and system dependencies
+        run: npx playwright install --with-deps chromium
+      - name: Run PR smoke
+        # core-regression imports the full request lifecycle suite (90s cases).
+        # Registration provisions its own synthetic identity; legacy smoke
+        # explicitly skips without E2E_EMAIL/E2E_PASSWORD. Do not supply secrets.
+        run: >-
+          npx playwright test --project=chromium-desktop
+          e2e/smoke.spec.cjs e2e/auth-registration.spec.cjs
+      - name: Upload smoke results, including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-smoke-reports
+          path: |
+            playwright-report/**
+            e2e/artifacts/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  e2e-matrix:
+    name: E2E (${{ matrix.browser }} / ${{ matrix.device }})
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_matrix == true)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+        device: [desktop, mobile]
+        exclude:
+          - browser: firefox
+            device: mobile
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: kanban_test
+          POSTGRES_USER: kanban_test
+          POSTGRES_PASSWORD: synthetic-e2e-test-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kanban_test -d kanban_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      CI: 'true'
+      DATABASE_URL: postgresql://kanban_test:synthetic-e2e-test-only@127.0.0.1:5432/kanban_test
+      E2E_DATABASE_URL: postgresql://kanban_test:synthetic-e2e-test-only@127.0.0.1:5432/kanban_test
+      TEST_DATABASE_URL: ''
+      PRODUCTION_DATABASE_URL: ''
+      NEXT_TELEMETRY_DISABLED: '1'
+      # Exercise the real managed Socket.IO server in the extended suite.
+      E2E_SOCKET: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Generate Prisma client
+        run: npx prisma generate
+      - name: Enable trigram extension in the disposable database
+        # The schema has a GIN index using gin_trgm_ops; db push fails without it.
+        run: echo 'CREATE EXTENSION IF NOT EXISTS pg_trgm;' | npx prisma db execute --stdin --url "$DATABASE_URL"
+      - name: Apply schema to the disposable service database
+        run: npx prisma db push --skip-generate
+      - name: Install browser and system dependencies
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Run functional regression (visual projects run separately)
+        run: npx playwright test --project=${{ matrix.browser }}-${{ matrix.device }}
+      - name: Upload matrix results, including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-matrix-${{ matrix.browser }}-${{ matrix.device }}-reports
+          path: |
+            playwright-report/**
+            e2e/artifacts/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  visual:
+    name: Visual regression and accessibility
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: kanban_test
+          POSTGRES_USER: kanban_test
+          POSTGRES_PASSWORD: synthetic-visual-test-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kanban_test -d kanban_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      CI: 'true'
+      DATABASE_URL: postgresql://kanban_test:synthetic-visual-test-only@127.0.0.1:5432/kanban_test
+      E2E_DATABASE_URL: postgresql://kanban_test:synthetic-visual-test-only@127.0.0.1:5432/kanban_test
+      TEST_DATABASE_URL: ''
+      PRODUCTION_DATABASE_URL: ''
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Generate Prisma client
+        run: npx prisma generate
+      - name: Enable trigram extension in the disposable database
+        # The schema has a GIN index using gin_trgm_ops; db push fails without it.
+        run: echo 'CREATE EXTENSION IF NOT EXISTS pg_trgm;' | npx prisma db execute --stdin --url "$DATABASE_URL"
+      - name: Apply schema to the disposable service database
+        run: npx prisma db push --skip-generate
+      - name: Install Chromium and system dependencies
+        run: npx playwright install --with-deps chromium
+      # The design fixture fails with "Font failed to load" when a fallback face
+      # (next/font emits local("Arial")) has no metric-compatible system font.
+      # Pinned explicitly so rendering does not depend on the runner's font set.
+      - name: Install deterministic font stack
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fonts-liberation fonts-noto-core fonts-noto-color-emoji
+      - name: Validate baseline PNG and provenance pairs
+        if: ${{ !inputs.update_baselines }}
+        run: node e2e/fixtures/check-baselines.cjs
+      - name: Compare screens and check accessibility
+        env:
+          # The local E2E_UPDATE_BASELINES flag remains forbidden in CI.
+          E2E_CI_UPDATE_BASELINES: ${{ github.event_name == 'workflow_dispatch' && inputs.update_baselines && '1' || '0' }}
+          PLAYWRIGHT_ONLY: ${{ inputs.only }}
+        run: |
+          filters=(e2e/design-screens.spec.cjs e2e/design-states.spec.cjs)
+          if [[ -n "$PLAYWRIGHT_ONLY" ]]; then
+            filters=("$PLAYWRIGHT_ONLY")
+          fi
+          options=()
+          if [[ "$E2E_CI_UPDATE_BASELINES" == '1' ]]; then
+            options+=(--update-snapshots)
+          fi
+          npx playwright test --project='visual-*' "${options[@]}" -- "${filters[@]}"
+      - name: Upload generated visual baselines
+        if: ${{ always() && inputs.update_baselines }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-baselines
+          path: e2e/baselines/**
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Upload visual results, including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-reports
+          path: |
+            e2e/artifacts/**
+            playwright-report/**
+          if-no-files-found: warn
+          retention-days: 7
+
+  unit:
+    name: Types, unit tests and lint (no database)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TEST_DATABASE_URL: ''
+      DATABASE_URL: ''
+      PRODUCTION_DATABASE_URL: ''
+      E2E_DATABASE_URL: ''
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Prepare reports
+        run: mkdir -p reports
+      - name: Typecheck
+        id: types
+        if: ${{ !cancelled() }}
+        run: |
+          set -o pipefail
+          npx tsc --noEmit 2>&1 | tee reports/typecheck.txt
+      - name: Unit and component tests only
+        id: unit
+        if: ${{ !cancelled() }}
+        run: >-
+          npx vitest run
+          --exclude 'tests/integration/**'
+          --exclude 'lenkanban/**'
+          --reporter=default --reporter=junit
+          --outputFile=reports/unit.xml
+      - name: ESLint
+        id: lint
+        if: ${{ !cancelled() }}
+        run: npx eslint . --format json --output-file reports/eslint.json
+      - name: Publish check summary
+        if: ${{ always() }}
+        env:
+          TYPES: ${{ steps.types.outcome }}
+          UNIT: ${{ steps.unit.outcome }}
+          LINT: ${{ steps.lint.outcome }}
+        run: |
+          printf '| Check | Result |\n| --- | --- |\n| TypeScript | %s |\n| Unit/component | %s |\n| ESLint | %s |\n' "$TYPES" "$UNIT" "$LINT" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload reports, including failures
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-reports
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 7
+
+  integration:
+    name: Optional isolated PostgreSQL tests
+    # Opt in explicitly in repository variables. Never expose the test
+    # environment to PR code. Provision its schema separately; no reset/seed/DDL here.
+    if: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && vars.RUN_INTEGRATION_TESTS == 'true' }}
+    runs-on: ubuntu-latest
+    environment: integration-tests
+    timeout-minutes: 20
+    env:
+      RUN_INTEGRATION_TESTS: ${{ vars.RUN_INTEGRATION_TESTS }}
+      # Reference an existing environment secret; this workflow creates no
+      # secrets, database services or production connections.
+      TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+      DATABASE_URL: ''
+      PRODUCTION_DATABASE_URL: ''
+      E2E_DATABASE_URL: ''
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Require an explicitly configured isolated database
+        run: |
+          node <<'NODE'
+          const fail = () => { throw new Error('Opt-in requires a dedicated PostgreSQL TEST_DATABASE_URL ending in _test'); };
+          if (process.env.RUN_INTEGRATION_TESTS !== 'true' || !process.env.TEST_DATABASE_URL) fail();
+          let url;
+          try { url = new URL(process.env.TEST_DATABASE_URL); } catch { fail(); }
+          let name;
+          try { name = decodeURIComponent(url.pathname.slice(1)); } catch { fail(); }
+          if (!['postgres:', 'postgresql:'].includes(url.protocol) || !name.endsWith('_test') || /[/\\]/.test(name)) fail();
+          NODE
+      - name: Install dependencies
+        run: npm ci
+      - name: Prepare reports
+        run: mkdir -p reports
+      - name: Integration tests against the prepared test database
+        run: >-
+          npx vitest run tests/integration
+          --reporter=default --reporter=junit
+          --outputFile=reports/integration.xml
+      - name: Upload integration results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-reports
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 7

@@ -1,0 +1,61 @@
+node_modules/
+.next/
+.DS_Store
+*.log
+# Bundled socket server, produced by `npm run socket:build` (and inside the
+# Docker socket-builder stage). Never a source file.
+dist/
+socket-runtime/
+beznal-op-provision.cjs
+
+# env / secrets
+.env
+.env.*
+!.env.example
+!deploy/*.env.example
+# Private SSH keys never leave the workstation; only *.pub may be shared.
+deploy/ssh/*
+!deploy/ssh/*.pub
+*.pem
+*.p12
+*.pfx
+
+# DB files / runtime data
+prisma/dev.db
+prisma/dev.db-journal
+/data/
+
+# OpenCode / local tooling
+.opencode/
+
+# TypeScript build cache
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# local notes / outputs
+*.txt
+.superpowers/
+.codex-local/
+.mail-work/
+.board-work/
+Taskboard-taskboard.lenremontn8n.ru/
+work/
+output/
+# Temp fixture dirs of deploy/check-secrets.test.mjs, left behind if a run is killed.
+deploy/.secret-scan-test-*/
+Python/
+
+# Playwright
+/test-results/
+/playwright-report/
+/playwright/.cache/
+
+# OS
+Thumbs.db
+
+# Backup files
+*.backup
+*.backup2
+
+# Deploy key material (never publish)
+.ssh-taskboard/

@@ -1,0 +1,126 @@
+# Контекст сборки Ленканбана (#73). Всё перечисленное не попадает в образ.
+# Приватный SSH-ключ, .env и чужие рабочие каталоги исключены намеренно.
+
+# Зависимости и артефакты сборки (восстанавливаются внутри образа)
+node_modules
+**/node_modules
+.next
+**/.next
+out
+*.tsbuildinfo
+**/*.tsbuildinfo
+
+# Секреты и локальные переменные
+.env*
+**/.env*
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Вложенная непроверенная копия проекта
+lenkanban/
+lenkanban
+**/lenkanban/
+
+# Рабочие/служебные каталоги агентов и выгрузки
+work/
+.board-work/
+.mail-work/
+output/
+outputs/
+dist/
+socket-runtime/
+beznal-op-provision.cjs
+.codex-local/
+.superpowers/
+.playwright-mcp/
+.claude/
+Python/
+
+# Root operational notes and screenshots are not build inputs.
+/*.txt
+/*.png
+
+# Пакет доступа к серверу (приватный ключ, known_hosts, шаблоны) — только чтение локально
+Taskboard-taskboard.lenremontn8n.ru/
+
+# Тесты, отчёты, кэши инструментов.
+# e2e/ НЕ исключается: `playwright.config.ts` импортирует `./e2e/fixtures/safety.cjs`,
+# а `next build` проверяет его типы через tsconfig. Фикстуры синтетические.
+test-results/
+playwright-report/
+playwright/.cache/
+**/test-results/
+**/playwright-report/
+**/blob-report/
+tests/e2e/artifacts/
+tests/e2e/videos/
+tests/e2e/screenshots/
+tests/e2e/.auth/
+e2e/artifacts/
+e2e/.auth/
+coverage/
+*.log
+npm-debug.log*
+
+# Git/OS/IDE
+.git
+.gitignore
+.gitattributes
+.github/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Документация и локальные заметки не нужны в runtime-образе
+docs/
+*.md
+!README.md
+
+# Deploy key material
+.ssh-taskboard/
+**/.ssh-taskboard/
+
+# Runtime directories at the context root. Do not exclude source modules such
+# as src/lib/attachments/ merely because their directory name matches data.
+uploads/
+upload/
+storage/
+data/
+attachments/
+logs/
+backups/
+# Dumps and private payloads at any depth.
+**/*.db
+**/*.db-*
+**/*.sqlite
+**/*.sqlite3
+**/*.sqlite-*
+**/*.sqlite3-*
+**/*.dump
+**/*.bak
+**/*.backup
+**/*.backup2
+**/*.sql
+!prisma/migrations/**/*.sql
+**/*.eml
+**/*.mbox
+**/*.pst
+**/*.ost
+**/*.zip
+**/*.tar
+**/*.tgz
+**/*.gz
+**/*.7z
+**/*.ppk
+**/id_rsa
+**/id_dsa
+**/id_ecdsa
+**/id_ed25519
+**/.mail-work/
+**/.board-work/
+
+# Deployment metadata and the reference env are not application build inputs.
+deploy/

@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 2,
+  "source": {
+    "commit": null,
+    "reason": "Source snapshot without .git",
+    "algorithm": "sha256",
+    "digest": "e0f55e2f78172122d6f037a2f65001ebf0d01c5fbc0e172edcd31e00684539c8"
+  },
+  "environment": {
+    "browser": "145.0.7632.6",
+    "os": {
+      "platform": "win32",
+      "release": "10.0.19045",
+      "arch": "x64"
+    },
+    "playwright": "1.58.2"
+  },
+  "project": "visual-360-light",
+  "viewport": {
+    "width": 360,
+    "height": 844
+  },
+  "locale": "ru-RU",
+  "timezone": "Europe/Moscow",
+  "fixedTime": "2026-10-21T09:00:00Z",
+  "pixelPolicy": {
+    "schemaVersion": 1,
+    "threshold": 0.02,
+    "maxDiffPixels": 0,
+    "maxChangedRgbPixels": 64,
+    "maxRgbChannelDelta": 4,
+    "maxAlphaChannelDelta": 0
+  },
+  "stability": {
+    "ready": true,
+    "pendingRequests": 0,
+    "loading": 0,
+    "pendingImages": 0,
+    "fontStatus": "loaded",
+    "dimensions": {
+      "width": 360,
+      "height": 844,
+      "bodyHeight": 844
+    },
+    "failedFonts": 0,
+    "socketFrames": 16,
+    "digest": "ba0e99b37b38dd7e9c4a3150865972a996b5dbbe70cbd05e513961e18e823af8",
+    "revision": 231,
+    "contentSha256": "d9986d3089402183168412c503a99e3d18d40da445d5e1cd07366666e7edd577",
+    "samples": 10,
+    "quietMs": 1200,
+    "fonts": [
+      {
+        "familyName": "Inter",
+        "postScriptName": "Inter-Thin",
+        "isCustomFont": true
+      },
+      {
+        "familyName": "JetBrains Mono",
+        "postScriptName": "JetBrains-Mono-Thin",
+        "isCustomFont": true
+      }
+    ]
+  },
+  "pngSha256": "3fb9ba3555c1c2a6310dfd09ae1a7f5228a1c4fe9a00440fc543c56e3e0f2a60"
+}

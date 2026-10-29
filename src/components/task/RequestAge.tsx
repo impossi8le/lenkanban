@@ -1,0 +1,6 @@
+"use client";
+import {useSyncExternalStore} from "react";
+let clock=Date.now();let timer:ReturnType<typeof setInterval>|null=null;
+const listeners=new Set<()=>void>();
+function subscribe(listener:()=>void){listeners.add(listener);if(!timer){clock=Date.now();timer=setInterval(()=>{clock=Date.now();listeners.forEach(fn=>fn());},30000);}return()=>{listeners.delete(listener);if(!listeners.size&&timer){clearInterval(timer);timer=null;}};}
+export function RequestAge({createdAt,precision}:{createdAt:string;precision?:"minutes"}){const now=useSyncExternalStore(subscribe,()=>clock,()=>0),date=new Date(createdAt);if(!Number.isFinite(date.getTime()))return null;const minutes=Math.max(0,Math.floor((now-date.getTime())/60000));const text=now===0?date.toLocaleDateString("ru-RU"):minutes<1?"Только что":minutes<60?`${minutes} мин назад`:minutes<1440?precision==="minutes"?`${Math.floor(minutes/60)} ч ${minutes%60} мин назад`:`${Math.floor(minutes/60)} ч назад`:precision==="minutes"?`${Math.floor(minutes/1440)} дн ${Math.floor(minutes/60)%24} ч ${minutes%60} мин назад`:`${Math.floor(minutes/1440)} дн назад`;return <time dateTime={date.toISOString()} title={date.toLocaleString("ru-RU")} className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">{text}</time>;}

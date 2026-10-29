@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 2,
+  "source": {
+    "commit": null,
+    "reason": "Source snapshot without .git",
+    "algorithm": "sha256",
+    "digest": "e0f55e2f78172122d6f037a2f65001ebf0d01c5fbc0e172edcd31e00684539c8"
+  },
+  "environment": {
+    "browser": "145.0.7632.6",
+    "os": {
+      "platform": "win32",
+      "release": "10.0.19045",
+      "arch": "x64"
+    },
+    "playwright": "1.58.2"
+  },
+  "project": "visual-360-light",
+  "viewport": {
+    "width": 360,
+    "height": 844
+  },
+  "locale": "ru-RU",
+  "timezone": "Europe/Moscow",
+  "fixedTime": "2026-10-21T09:00:00Z",
+  "pixelPolicy": {
+    "schemaVersion": 1,
+    "threshold": 0.02,
+    "maxDiffPixels": 0,
+    "maxChangedRgbPixels": 64,
+    "maxRgbChannelDelta": 4,
+    "maxAlphaChannelDelta": 0
+  },
+  "stability": {
+    "ready": true,
+    "pendingRequests": 0,
+    "loading": 0,
+    "pendingImages": 0,
+    "fontStatus": "loaded",
+    "dimensions": {
+      "width": 360,
+      "height": 844,
+      "bodyHeight": 844
+    },
+    "failedFonts": 0,
+    "socketFrames": 12,
+    "digest": "949c70c25a7b6f3ebc835e0ebc684671155a3a5a5cd042debd6fd5d3096fca16",
+    "revision": 155,
+    "contentSha256": "cadcc7cd517e7b0b4e32ae26d6a4a67214773be37d39f7abae8d79f95fdfe7b5",
+    "samples": 16,
+    "quietMs": 1200,
+    "fonts": [
+      {
+        "familyName": "Inter",
+        "postScriptName": "Inter-Thin",
+        "isCustomFont": true
+      },
+      {
+        "familyName": "Segoe UI Symbol",
+        "postScriptName": "SegoeUISymbol",
+        "isCustomFont": false
+      }
+    ]
+  },
+  "pngSha256": "202ef41d23ffc7152782369df2a673497150857c90bdca0ea43195bd837ed511"
+}

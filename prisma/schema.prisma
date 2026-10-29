@@ -1,0 +1,898 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum GlobalRole {
+  USER
+  ADMIN
+}
+
+enum ProjectRole {
+  MEMBER
+  PROJECT_ADMIN
+}
+
+enum TaskRequestState {
+  DRAFT
+  SUBMITTED
+  IN_PROGRESS
+  NEEDS_INFO
+  COMPLETED
+  CANCELLED
+  CLOSED
+}
+
+model User {
+  id           String  @id @default(cuid())
+  email        String  @unique
+  name         String?
+  avatarUrl    String?
+  passwordHash String?
+
+  globalRole GlobalRole @default(USER)
+
+  externalId String?   @unique
+  authSource String?
+  isBlocked  Boolean   @default(false)
+  blockedAt  DateTime?
+
+  primaryDepartmentId         String?
+  primaryDepartment           Department?                 @relation("PrimaryDepartment", fields: [primaryDepartmentId], references: [id], onDelete: Restrict)
+  ledDepartments              Department[]                @relation("DepartmentLeader")
+  ledResponsibleGroups        ResponsibleGroup[]          @relation("ResponsibleGroupLeader")
+  responsibleGroupMemberships ResponsibleGroupMember[]
+  scopedPrivilegeAssignments  ScopedPrivilegeAssignment[]
+  authoredTaskRequests        TaskRequest[]               @relation("TaskRequestAuthor")
+  executedTaskRequests        TaskRequest[]               @relation("TaskRequestExecutor")
+  requestQueueSeen            TaskRequestQueueSeen[]
+
+  // Email verification
+  emailVerified           DateTime?
+  verificationToken       String?   @unique
+  verificationTokenExpiry DateTime?
+
+  // Password reset
+  resetToken       String?   @unique
+  resetTokenExpiry DateTime?
+
+  accounts Account[]
+  sessions Session[]
+
+  projects                Project[]
+  projectMemberships      ProjectMember[]
+  projectMembershipsAdded ProjectMember[]   @relation("ProjectMemberAddedBy")
+  chatMessages            ChatMessage[]
+  apiTokens               ApiToken[]
+  activities              Activity[]
+  taskAssignments         TaskAssignee[]
+  taskWatchers            TaskWatcher[]
+  taskViewReceipts        TaskViewReceipt[]
+  notifications           Notification[]
+  taskTemplates           TaskTemplate[]    @relation("TaskTemplateCreator")
+  recurringTasks          RecurringTask[]   @relation("RecurringTaskCreator")
+  automationRules         AutomationRule[]  @relation("AutomationRuleCreator")
+  projectTemplates        ProjectTemplate[] @relation("ProjectTemplateCreator")
+  savedViews              SavedView[]       @relation("SavedViewCreator")
+  createdTasks            Task[]            @relation("TaskCreator")
+  myDayEntries            MyDayEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([primaryDepartmentId])
+  // ADMIN user list keyset: ORDER BY "createdAt" DESC, "id" DESC.
+  @@index([createdAt, id])
+  // ILIKE '%q%' over name/email in /api/users and /api/admin/users.
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "User_name_gin_idx")
+  @@index([email(ops: raw("gin_trgm_ops"))], type: Gin, map: "User_email_gin_idx")
+}
+
+// Private diary content is not task Activity or diagnostic telemetry.
+model MyDayEntry {
+  id              String   @id @default(cuid())
+  ownerId         String
+  owner           User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  date            DateTime @db.Date
+  text            String   @db.Text
+  version         Int      @default(1)
+  lastOperationId String   @db.Uuid
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([ownerId, date])
+}
+
+// Organizational metadata does not grant legacy project access.
+model Department {
+  id                         String                      @id @default(cuid())
+  name                       String
+  parentId                   String?
+  parent                     Department?                 @relation("DepartmentTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children                   Department[]                @relation("DepartmentTree")
+  leaderId                   String?
+  leader                     User?                       @relation("DepartmentLeader", fields: [leaderId], references: [id], onDelete: SetNull)
+  archivedAt                 DateTime?
+  employees                  User[]                      @relation("PrimaryDepartment")
+  projects                   Project[]
+  scopedPrivilegeAssignments ScopedPrivilegeAssignment[]
+  groupPrivilegeAssignments  GroupPrivilegeAssignment[]
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+
+  @@index([parentId])
+  @@index([leaderId])
+}
+
+model ResponsibleGroup {
+  id         String                   @id @default(cuid())
+  name       String
+  archivedAt DateTime?
+  leaderId   String?
+  leader     User?                    @relation("ResponsibleGroupLeader", fields: [leaderId], references: [id], onDelete: SetNull)
+  members    ResponsibleGroupMember[]
+  privilegeAssignments GroupPrivilegeAssignment[]
+  projects   Project[]
+  createdAt  DateTime                 @default(now())
+  updatedAt  DateTime                 @updatedAt
+
+  @@index([leaderId])
+}
+
+model ResponsibleGroupMember {
+  groupId   String
+  userId    String
+  group     ResponsibleGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime         @default(now())
+
+  @@id([groupId, userId])
+  @@index([userId])
+}
+
+// Business command history is separate from detailed telemetry retention.
+// No actor/resource FK: removing a resource must not make a command reusable.
+model OrganizationState {
+  id      String @id
+  version Int    @default(0)
+}
+
+model OrganizationOperation {
+  id               String   @id @default(cuid())
+  actorId          String
+  operationId      String   @db.Uuid
+  operation        String
+  targetKind       String
+  targetId         String
+  requestHash      String
+  expectedVersion  Int
+  committedVersion Int
+  changed          Boolean
+  before           Json
+  after            Json
+  result           Json
+  committedAt      DateTime @default(now())
+
+  @@unique([actorId, operationId])
+  @@index([committedAt, id])
+}
+
+model ApiToken {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name      String
+  tokenHash String @unique
+  scopes    String[] @default([])
+  expiresAt DateTime?
+
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+}
+
+model RateLimit {
+  key         String   @id
+  count       Int      @default(0)
+  windowStart DateTime @default(now())
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Project {
+  id                         String                      @id @default(cuid())
+  name                       String
+  description                String?
+  boardRevision              Int                         @default(0)
+  lifecycleColumnMap         Json?
+  dndV2Enabled               Boolean                     @default(false)
+  applicantPolicyConfig      ProjectApplicantPolicy?
+  scopedPrivilegeAssignments ScopedPrivilegeAssignment[]
+  groupPrivilegeAssignments  GroupPrivilegeAssignment[]
+
+  departmentId       String?
+  department         Department?       @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  responsibleGroupId String?
+  responsibleGroup   ResponsibleGroup? @relation(fields: [responsibleGroupId], references: [id], onDelete: Restrict)
+
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id])
+
+  members         ProjectMember[]
+  tasks           Task[]
+  tags            Tag[]
+  columns         ProjectColumn[]
+  taskTemplates   TaskTemplate[]
+  recurringTasks  RecurringTask[]
+  automationRules AutomationRule[]
+  savedViews      SavedView[]
+  moveOperations  TaskMoveOperation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "Project_name_gin_idx")
+  @@index([departmentId])
+  @@index([responsibleGroupId])
+  // Project list scope: OR[{ ownerId }, { members.some }].
+  @@index([ownerId])
+  // Project list ordering (dashboard top 6 and the legacy unbounded list).
+  @@index([updatedAt])
+}
+
+model PrivilegeProfile {
+  id          String                      @id @default(cuid())
+  name        String
+  permissions Json
+  archivedAt  DateTime?
+  createdAt   DateTime                    @default(now())
+  updatedAt   DateTime                    @updatedAt
+  assignments ScopedPrivilegeAssignment[]
+  groupAssignments GroupPrivilegeAssignment[]
+}
+
+model GroupPrivilegeAssignment {
+  id           String           @id
+  groupId      String
+  group        ResponsibleGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  profileId    String
+  profile      PrivilegeProfile @relation(fields: [profileId], references: [id], onDelete: Restrict)
+  scopeKind    String
+  departmentId String?
+  department   Department?      @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  projectId    String?
+  project      Project?         @relation(fields: [projectId], references: [id], onDelete: Restrict)
+
+  @@index([groupId])
+  @@index([profileId])
+  @@index([departmentId])
+  @@index([projectId])
+}
+
+model ScopedPrivilegeAssignment {
+  id           String           @id
+  userId       String
+  user         User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  profileId    String
+  profile      PrivilegeProfile @relation(fields: [profileId], references: [id], onDelete: Restrict)
+  scopeKind    String
+  departmentId String?
+  department   Department?      @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  projectId    String?
+  project      Project?         @relation(fields: [projectId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([profileId])
+}
+
+model ProjectApplicantPolicy {
+  projectId String  @id
+  policy    Json
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model ProjectColumn {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  name        String
+  color       String // Hex color: "#3b82f6"
+  position    Int // Sort order: 0, 1, 2, 3...
+  workflowKey String
+
+  tasks Task[] // Tasks in this column
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, position])
+  @@unique([projectId, workflowKey])
+  @@index([projectId])
+}
+
+model ProjectMember {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  role ProjectRole @default(MEMBER)
+
+  addedById String?
+  addedBy   User?   @relation("ProjectMemberAddedBy", fields: [addedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, userId])
+  @@index([userId])
+  @@index([projectId])
+}
+
+model Task {
+  id                  String                   @id @default(cuid())
+  importKey           String?                  @unique
+  title               String
+  description         String?
+  status              String                   @default("TODO") // TODO, IN_PROGRESS, IN_REVIEW, DONE (legacy, use columnId)
+  priority            String                   @default("MEDIUM") // URGENT, HIGH, MEDIUM, LOW
+  position            Int                      @default(0) // Drag-and-drop sort order index
+  version             Int                      @default(0)
+  rank                String                   @db.VarChar(22)
+  projectId           String
+  project             Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  columnId            String
+  column              ProjectColumn            @relation(fields: [columnId], references: [id], onDelete: Restrict)
+  createdById         String? // User who created the task (nullable for existing tasks)
+  createdBy           User?                    @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  deadline            DateTime?
+  attachments         Json                     @default("[]") // Array of {url, name, size, mime, width?, height?}
+  messages            ChatMessage[]
+  tags                TaskTag[]
+  activities          Activity[]
+  assignees           TaskAssignee[]
+  checklistItems      TaskChecklistItem[]
+  moveOperations      TaskMoveOperation[]
+  recurringOccurrence RecurringTaskOccurrence?
+  request             TaskRequest?
+  watchers            TaskWatcher[]
+  viewReceipts        TaskViewReceipt[]
+  relatedAsLeft       TaskRelation[]           @relation("TaskRelationLeft")
+  relatedAsRight      TaskRelation[]           @relation("TaskRelationRight")
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+
+  @@unique([projectId, columnId, rank])
+  @@index([columnId])
+  @@index([createdById])
+  @@index([projectId, status])
+  @@index([projectId, columnId, position])
+  // Board list: WHERE "projectId" = $1 ORDER BY "position" ASC (no columnId).
+  // The (projectId, columnId, position) index above cannot order by position
+  // without a columnId equality predicate.
+  @@index([projectId, position])
+  // Analytics groupBy(status) / groupBy(priority) and status-only counters.
+  @@index([status])
+  @@index([priority])
+  // Overdue counters: "status" != 'DONE' AND "deadline" < now().
+  @@index([deadline])
+  @@index([title])
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "Task_title_gin_idx")
+  @@index([description])
+  @@index([description(ops: raw("gin_trgm_ops"))], type: Gin, map: "Task_description_gin_idx")
+}
+
+model TaskRelation {
+  leftTaskId  String
+  rightTaskId String
+  leftTask    Task     @relation("TaskRelationLeft", fields: [leftTaskId], references: [id], onDelete: Cascade)
+  rightTask   Task     @relation("TaskRelationRight", fields: [rightTaskId], references: [id], onDelete: Cascade)
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@id([leftTaskId, rightTaskId])
+  @@index([rightTaskId])
+}
+
+model MailImportBatch {
+  id        String   @id @default(cuid())
+  batchId   String   @unique
+  state     Json
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdBy, createdAt])
+}
+
+// Marker storage only. No production marker creator or activation exists.
+model TaskRequest {
+  taskId          String           @id
+  task            Task             @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  contractVersion Int
+  state           TaskRequestState
+  authorId        String
+  author          User             @relation("TaskRequestAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  executorId      String?
+  executor        User?            @relation("TaskRequestExecutor", fields: [executorId], references: [id], onDelete: Restrict)
+  // Empty preserves the general queue; nonempty is immutable selected audience.
+  audienceUserIds String[]         @default([])
+  // Zero keeps requests predating queue-view tracking viewed at launch.
+  beznalPhase     String?
+  currentInvoiceUrl String?
+  queueEpoch      Int              @default(0)
+  queueSeen       TaskRequestQueueSeen[]
+
+  needsInfoSince DateTime?
+  pausedTotalMs  Int       @default(0)
+
+  deletedAt    DateTime?
+  deletedById  String?
+  deleteReason String?
+
+  @@index([authorId])
+  @@index([executorId])
+}
+
+// Receipts belong to the current arrival; a genuine new queue entry clears them.
+model TaskRequestQueueSeen {
+  taskId String
+  userId String
+  seenAt DateTime @default(now())
+  request TaskRequest @relation(fields: [taskId], references: [taskId], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+  @@index([userId])
+}
+
+// Durable details-save receipts contain no task content and survive deletion.
+model TaskCommandOperation {
+  id               String   @id @default(cuid())
+  actorId          String
+  operationId      String   @db.Uuid
+  taskId           String
+  projectId        String
+  requestHash      String
+  expectedVersion  Int
+  committedVersion Int
+  changed          Boolean
+  createdAt        DateTime @default(now())
+
+  @@unique([actorId, operationId])
+  @@index([taskId, createdAt])
+}
+
+model TaskMoveOperation {
+  id          String   @id @default(cuid())
+  operationId String   @unique
+  taskId      String
+  projectId   String
+  requestHash String
+  response    Json
+  createdAt   DateTime @default(now())
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+}
+
+model TaskChecklistItem {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  text      String
+  completed Boolean  @default(false)
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([taskId, position])
+}
+
+model ChatMessage {
+  id          String   @id @default(cuid())
+  clientId    String?  @unique
+  taskId      String
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  authorId    String
+  author      User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  contentText String   @default("")
+  attachments Json     @default("[]")
+  reactions   Json     @default("{}") // { "👍": ["userId1", "userId2"], "❤️": ["userId3"] }
+  mentions    Json     @default("[]") // ["userId1", "userId2"]
+  readBy      Json?    @default("{}")
+  isInternal  Boolean  @default(false)
+  version     Int      @default(0)
+  editedAt    DateTime?
+  deletedAt   DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([taskId])
+  @@index([taskId, createdAt])
+  @@index([taskId, isInternal])
+  // Deliberately no GIN index on "readBy". Both read sites negate the jsonb
+  // existence operator (`NOT ("readBy" ? userId)`), and PostgreSQL has no
+  // negated GIN operator class, so the index could not serve either one:
+  //   src/app/api/tasks/route.ts:180
+  //   src/app/api/tasks/[id]/messages/read/route.ts:59
+  // `/api/messages/unread` does not push the predicate down at all; it selects
+  // rows and filters in JavaScript. Revisit once a query issues a positive
+  // `"readBy" ? $1`, or replace the jsonb column with a read-receipt table.
+}
+
+// Viewing changes is independent of notification/chat/queue read receipts.
+model TaskViewReceipt {
+  taskId       String
+  task         Task     @relation(fields: [taskId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  snapshotHash String
+  viewedAt     DateTime @default(dbgenerated("clock_timestamp()")) @db.Timestamptz(6)
+  observedAt   DateTime @db.Timestamptz(6)
+
+  @@id([taskId, userId])
+  @@index([userId])
+}
+
+model TaskWatcher {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([taskId, userId])
+  @@index([userId])
+}
+
+model Tag {
+  id        String    @id @default(cuid())
+  name      String
+  color     String // Hex color
+  projectId String
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks     TaskTag[]
+  createdAt DateTime  @default(now())
+
+  @@unique([projectId, name])
+  @@index([projectId])
+}
+
+model TaskTag {
+  id     String @id @default(cuid())
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  tagId  String
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, tagId])
+  @@index([taskId])
+  @@index([tagId])
+}
+
+model TaskAssignee {
+  id         String   @id @default(cuid())
+  taskId     String
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedAt DateTime @default(now())
+
+  @@unique([taskId, userId])
+  @@index([taskId])
+  @@index([userId])
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String // "created", "status_changed", "priority_changed", "assigned", "unassigned", "deadline_set", "deadline_removed", "tag_added", "tag_removed", etc.
+  oldValue  Json?
+  newValue  Json?
+  createdAt DateTime @default(now())
+
+  @@index([taskId, createdAt])
+  @@index([userId])
+}
+
+model Notification {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type    String // "task_assigned", "task_mentioned", "task_status_changed", "task_deadline_approaching", "project_member_added", "chat_message"
+  title   String
+  message String
+
+  read   Boolean   @default(false)
+  readAt DateTime?
+
+  actionUrl String? // URL to navigate to when clicked (e.g., "/projects/xxx/board?task=yyy")
+  metadata  Json? // Additional data: {taskId, projectId, actorId, etc.}
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, read, createdAt])
+  @@index([userId, createdAt])
+}
+
+model TaskTemplate {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  templateTitle       String
+  templateDescription String?
+  priority            String  @default("MEDIUM")
+  tags                Json    @default("[]")
+  checklistItems      Json    @default("[]")
+  estimatedDuration   Int?
+
+  createdById String
+  createdBy   User   @relation("TaskTemplateCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([createdById])
+}
+
+model RecurringTask {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // Task template data
+  taskTitle       String
+  taskDescription String?
+  priority        String  @default("MEDIUM")
+  tags            Json    @default("[]")
+  checklistItems  Json    @default("[]")
+  assigneeIds     Json    @default("[]")
+
+  // Recurrence settings
+  frequency  String // "daily", "weekly", "monthly", "yearly"
+  interval   Int       @default(1) // Every N days/weeks/months
+  daysOfWeek Json?     @default("[]") // For weekly: [0,1,2,3,4,5,6] (Sun-Sat)
+  dayOfMonth Int? // For monthly: 1-31
+  startDate  DateTime
+  endDate    DateTime?
+  nextRunAt  DateTime
+
+  // Status
+  active    Boolean   @default(true)
+  lastRunAt DateTime?
+
+  occurrences RecurringTaskOccurrence[]
+
+  createdById String
+  createdBy   User   @relation("RecurringTaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([createdById])
+  @@index([active, nextRunAt])
+}
+
+// A committed receipt keeps the occurrence identity even if its Task is deleted.
+// Historical tasks are not backfilled without a proven schedule/time mapping.
+model RecurringTaskOccurrence {
+  id              String   @id @default(cuid())
+  recurringTaskId String
+  scheduledAt     DateTime
+  taskId          String?  @unique
+  createdAt       DateTime @default(now())
+
+  recurringTask RecurringTask @relation(fields: [recurringTaskId], references: [id], onDelete: Cascade)
+  task          Task?         @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@unique([recurringTaskId, scheduledAt])
+}
+
+model TelemetrySession {
+  id        String   @id @db.Uuid
+  actorKey  String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+model TelemetryEvent {
+  id          String   @id @default(cuid())
+  actorKey    String
+  eventId     String   @db.Uuid
+  receivedAt  DateTime @default(now())
+  occurredAt  DateTime
+  event       String
+  category    String
+  source      String
+  trust       String
+  actionId    String?  @db.Uuid
+  requestId   String?  @db.Uuid
+  errorId     String?  @db.Uuid
+  operationId String?  @db.Uuid
+  sessionId   String?  @db.Uuid
+  projectId   String?
+  taskId      String?
+  payload     Json
+  problemReportComment ProblemReportComment?
+
+  @@unique([actorKey, eventId])
+  @@index([receivedAt, id])
+  @@index([category, event])
+}
+
+// Explicit employee report text is business content, never telemetry payload.
+// The linked diagnostic anchor owns author identity and 30-day cleanup scope.
+model ProblemReportComment {
+  reportId         String         @id @db.Uuid
+  telemetryEventId String         @unique
+  comment          String         @db.VarChar(2000)
+  createdAt        DateTime       @default(now())
+  telemetryEvent   TelemetryEvent @relation(fields: [telemetryEventId], references: [id], onDelete: Cascade)
+}
+
+// Business idempotency receipts are independent of detailed telemetry retention.
+// No user/task/item FK: deleting a resource cannot make an old command reusable.
+model ChecklistOperationReceipt {
+  id                   String    @id @default(cuid())
+  actorId              String
+  operationId          String    @db.Uuid
+  taskId               String
+  itemId               String
+  projectId            String
+  completed            Boolean
+  changed              Boolean
+  eventId              String    @db.Uuid
+  actionId             String?   @db.Uuid
+  requestId            String?   @db.Uuid
+  committedAt          DateTime  @default(now())
+  telemetryProjectedAt DateTime?
+
+  @@unique([actorId, operationId])
+  @@index([telemetryProjectedAt, committedAt])
+}
+
+model AutomationRule {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  active Boolean @default(true)
+
+  // Trigger: when this event happens
+  trigger String // "task_created", "status_changed", "priority_changed", "assignee_added", "deadline_set", "tag_added"
+
+  // Conditions: array of {field, operator, value}
+  // Example: [{"field": "status", "operator": "equals", "value": "DONE"}]
+  conditions Json @default("[]")
+
+  // Actions: array of {type, params}
+  // Example: [{"type": "notify_assignees", "params": {}}, {"type": "add_tag", "params": {"tagName": "Completed"}}]
+  actions Json @default("[]")
+
+  createdById String
+  createdBy   User   @relation("AutomationRuleCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([createdById])
+  @@index([active, trigger])
+}
+
+model ProjectTemplate {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+
+  // Template data stores project configuration
+  // {
+  //   "columns": [{"name": "To Do", "color": "#3b82f6", "position": 0}, ...],
+  //   "tags": [{"name": "Bug", "color": "#ef4444"}, ...],
+  //   "taskTemplates": [{"title": "Setup", "description": "...", "priority": "HIGH"}, ...],
+  //   "recurringTasks": [...],
+  //   "automationRules": [...]
+  // }
+  templateData Json @default("{}")
+
+  createdById String
+  createdBy   User   @relation("ProjectTemplateCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdById])
+}
+
+model SavedView {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // View configuration
+  viewType String @default("board") // "board", "table", "calendar"
+
+  // Filter settings
+  filters Json @default("{}") // {status, priority, assignee, tags}
+
+  // Sort settings
+  sortBy String @default("position")
+
+  // Whether this is the default view for the user
+  isDefault Boolean @default(false)
+
+  createdById String
+  createdBy   User   @relation("SavedViewCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([createdById])
+  @@index([projectId, createdById])
+}

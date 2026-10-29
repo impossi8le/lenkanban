@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "platform": "linux",
+  "architecture": "x64",
+  "node": "v22.22.2",
+  "nodeSha256": "81925c0995b5c1427b5d538e6a90ca2fdc4daffb786b09af749beaf7369d4e90",
+  "npm": "11.6.2",
+  "browser": "Google Chrome for Testing 145.0.7632.6",
+  "browserSha256": "481fea1516a1f2b76454664272f12cd9dd1f20117b21e1f1498e08bc7f872c00",
+  "osReleaseSha256": "3e5851448bae5b36f351becde037a8b13b77307279f484eda808f8177d9a4293",
+  "packages": {
+    "count": 516,
+    "sha256": "df6f819d3130e1cded0d633d54a759f5fa66979d3ccecc48dc58fe84f8c87cc8"
+  },
+  "fonts": {
+    "entries": 483,
+    "sha256": "5bc5f49684d249e7ec15868055f86717d15d21a939fac26748cc47a12d58856f"
+  },
+  "fontConfig": {
+    "entries": 33,
+    "sha256": "40b83b9d9cf96c1a145a715f6bbe48a624328f5f04c0dd739e21ddcda88065cc"
+  },
+  "resolvedFontList": {
+    "count": 321,
+    "sha256": "de645aeeef26b0594643a2b848546fb13c6e8eb43909e05c38cb446cd87d3de2"
+  }
+}

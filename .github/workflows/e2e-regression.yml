@@ -1,0 +1,68 @@
+name: Windows E2E functional regression
+
+on:
+  workflow_dispatch:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  browser:
+    # Prepared isolated DB only, on trusted default-branch code. No migrations,
+    # seed/reset or connection to a shared application server in this workflow.
+    if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && vars.RUN_E2E_TESTS == 'true' }}
+    runs-on: windows-2022
+    environment: integration-tests
+    timeout-minutes: 40
+    env:
+      CI: 'true'
+      E2E_DATABASE_URL: ${{ secrets.E2E_DATABASE_URL }}
+      DATABASE_URL: ''
+      TEST_DATABASE_URL: ''
+      PRODUCTION_DATABASE_URL: ''
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:3555
+      PLAYWRIGHT_EXTERNAL_SERVER: '0'
+      E2E_DND_V2_ENABLED: 'true'
+      E2E_UPDATE_BASELINES: '0'
+      E2E_SOCKET: '0'
+      ATTACHMENT_STORAGE: local
+      ATTACHMENT_LOCAL_DIR: ${{ github.workspace }}\e2e\artifacts\storage
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm.cmd ci
+      - name: Verify pointer fixture geometry
+        run: node --test e2e/fixtures/pointer-gesture.node-test.cjs
+      - name: Validate isolated database configuration (no connection)
+        run: node -e "require('./e2e/fixtures/safety.cjs').parseTestDatabaseUrl(process.env.E2E_DATABASE_URL)"
+      - name: Configure telemetry for isolated error regressions
+        shell: pwsh
+        run: |
+          $TELEMETRY_FIXTURE_MATERIAL = [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+          "TELEMETRY_ENABLED=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "TELEMETRY_HMAC_SECRET=$TELEMETRY_FIXTURE_MATERIAL" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Install matching Chromium
+        run: npx.cmd --no-install playwright install chromium
+      - name: Run request, watcher, file and error regressions
+        run: npx.cmd --no-install playwright test --config=e2e/playwright.ci.config.ts --project=chromium-desktop core-regression.spec.cjs collaboration.spec.cjs error-path-regression.spec.cjs dnd99-handle-opening.spec.cjs --update-snapshots=none
+      - name: Publish browser reports and visual diffs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-regression-${{ github.run_attempt }}
+          # Never upload private storage, environment or authentication traces.
+          path: |
+            e2e/artifacts/report/
+            e2e/artifacts/results/
+            e2e/artifacts/results.json
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Report configuration block
+        if: failure()
+        run: Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value 'E2E failed or setup is blocked. Missing DB, PNG/JSON provenance, server or storage is not a successful test. Review step logs and uploaded reports.'

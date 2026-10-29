@@ -1,0 +1,15 @@
+import { beforeEach, expect, it, vi } from "vitest";
+const mock = vi.hoisted(() => ({ task: vi.fn(), rows: vi.fn(), internal: vi.fn(), ids: vi.fn() }));
+vi.mock("@/lib/prisma", () => ({ prisma: { task: { findFirst: mock.task }, activity: { findMany: mock.rows } } }));
+vi.mock("@/lib/project-access", () => ({ getTaskReadWhere: async () => ({ id:"task" }) }));
+vi.mock("@/lib/require-api-user", () => ({ requireApiUser: async () => ({ id:"actor",globalRole:"USER" }), UnauthorizedError: class extends Error {} }));
+vi.mock("@/app/api/tasks/[id]/messages/discussion-access", () => ({ canActorReadInternal: mock.internal, loadInternalMessageIds: mock.ids, loadProjectDiscussionFacts: async () => ({}) }));
+import { GET } from "./route";
+const history = (isInternal: boolean) => ({ id: isInternal ? "internal" : "public", action:"message_edited", oldValue:{ messageId:isInternal ? "internal-message" : "public-message",contentText:"Before",isInternal },newValue:{ messageId:isInternal ? "internal-message" : "public-message",contentText:"After",isInternal } });
+beforeEach(() => { vi.resetAllMocks(); mock.task.mockResolvedValue({id:"task",projectId:"project"}); mock.internal.mockResolvedValue(false); mock.ids.mockResolvedValue(new Set(["internal-message"])); mock.rows.mockResolvedValue([history(true),history(false),{id:"ordinary",action:"priority_changed"}]); });
+const get = () => GET(new Request("https://app.test/api/activities?taskId=task"));
+it("hides internal old/new text from ordinary readers while preserving ordinary history", async () => { const data=(await (await get()).json()).data; expect(data.map((row:{id:string})=>row.id)).toEqual(["public","ordinary"]); });
+it("returns internal old/new only to fresh internal readers; revocation takes effect on the next read", async () => { mock.internal.mockResolvedValueOnce(true); expect((await (await get()).json()).data).toHaveLength(3); expect((await (await get()).json()).data).toHaveLength(2); });
+it("uses the persisted internal classification as an additional cap and fails closed on malformed metadata", async () => { mock.ids.mockResolvedValue(new Set(["internal-message","public-message"])); mock.rows.mockResolvedValue([history(false),{...history(false),oldValue:{contentText:"hidden"}}]); expect((await (await get()).json()).data).toEqual([]); });
+it("checks shared task visibility before reading any history", async () => { mock.task.mockResolvedValue(null); expect((await get()).status).toBe(403); expect(mock.rows).not.toHaveBeenCalled(); });
+it("does not downgrade an internal storage failure to public history", async () => { mock.ids.mockRejectedValue(Error("private")); const response=await get();expect(response.status).toBe(500);expect(JSON.stringify(await response.json())).not.toContain("private"); });

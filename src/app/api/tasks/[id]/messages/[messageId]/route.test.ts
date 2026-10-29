@@ -1,0 +1,26 @@
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+const api = vi.hoisted(() => ({ command: vi.fn(), auth: vi.fn(), rate: vi.fn(), emit: vi.fn() }));
+vi.mock("@/lib/prisma", () => ({ prisma: {} }));
+vi.mock("@/lib/chat-message-command", async original => ({ ...await original<typeof import("@/lib/chat-message-command")>(), changeOwnMessage: api.command }));
+vi.mock("@/lib/require-api-user", () => ({ requireApiUser: api.auth, UnauthorizedError: class UnauthorizedError extends Error {} }));
+vi.mock("@/lib/rate-limit", () => ({ rateLimitOrThrowKey: api.rate, rateLimitErrorResponse: () => new Response(null, { status: 429 }) }));
+vi.mock("@/socket/board-events", () => ({ emitTaskMessageUpdated: api.emit }));
+import { PATCH, DELETE } from "./route";
+import { TaskCommandError } from "@/lib/task-command";
+import { NotFoundError, ForbiddenError } from "@/lib/errors";
+import { MessageDeletedError } from "@/lib/chat-message-command";
+const body = { operationId: "11111111-1111-4111-8111-111111111111", expectedVersion: 0, contentText: "After" };
+const ack = { taskId: "task", messageId: "message", version: 1, changed: true, replayed: false };
+const send = (value: unknown = body, action: "edit" | "delete" = "edit", origin = "https://app.test") => (action === "edit" ? PATCH : DELETE)(new Request("https://app.test/api/tasks/task/messages/message", { method: action === "edit" ? "PATCH" : "DELETE", headers: { origin }, body: JSON.stringify(value) }), { params: Promise.resolve({ id: "task", messageId: "message" }) });
+beforeEach(() => { vi.resetAllMocks(); vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://app.test"); api.auth.mockResolvedValue({ id: "actor", globalRole: "USER" }); api.command.mockResolvedValue({ ack, projectId: "project", message: { id: "message", taskId: "task" } }); });
+afterEach(() => vi.unstubAllEnvs());
+it("binds actor/task/message/action to the authenticated versioned command and publishes only after commit", async () => {
+ const response = await send(); expect(response.status).toBe(200); expect(response.headers.get("cache-control")).toBe("no-store"); expect((await response.json()).data).toEqual(ack);
+ expect(api.command).toHaveBeenCalledWith({}, { ...body, actorId: "actor", taskId: "task", messageId: "message", action: "edit" }); expect(api.rate).toHaveBeenCalledWith("tasks:update","actor"); expect(api.emit).toHaveBeenCalledOnce();
+});
+it("uses the same metadata-only result for soft delete", async () => { expect((await send({ operationId: body.operationId, expectedVersion: 0 }, "delete")).status).toBe(200); expect(api.command.mock.calls[0][1]).toMatchObject({ action: "delete" }); });
+it.each([{ ...body, attachments: [] }, { contentText: "text" }, { ...body, authorId: "victim" }])("rejects unsupported fields or unversioned intent %j", async value => { expect((await send(value)).status).toBe(422); expect(api.command).not.toHaveBeenCalled(); });
+it("blocks foreign origin and rate limit before mutation", async () => { expect((await send(body,"edit","https://foreign.test")).status).toBe(403); api.rate.mockRejectedValueOnce(Error("quota")); expect((await send()).status).toBe(429); expect(api.command).not.toHaveBeenCalled(); });
+it.each([new TaskCommandError("STALE_TASK_VERSION"),new MessageDeletedError(),new NotFoundError(),new ForbiddenError()])("does not publish refused commands %j", async error => { api.command.mockRejectedValue(error); const response = await send(); expect(response.status).toBe(error instanceof NotFoundError ? 404 : error instanceof ForbiddenError ? 403 : 409); expect(api.emit).not.toHaveBeenCalled(); });
+it("does not repeat effects on replay or no-op", async () => { for (const override of [{ replayed: true },{ changed: false }]) { api.command.mockResolvedValue({ ack: { ...ack, ...override },projectId:"project",message:{} }); expect((await send()).status).toBe(200); } expect(api.emit).not.toHaveBeenCalled(); });
+it("keeps success after delivery failure and hides raw errors on uncertainty", async () => { api.emit.mockRejectedValue(Error("secret")); expect((await send()).status).toBe(200); api.command.mockRejectedValue(Error("private-before-text")); const response = await send(); expect(response.status).toBe(500); expect(JSON.stringify(await response.json())).not.toContain("private-before-text"); });
